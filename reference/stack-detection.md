@@ -31,7 +31,8 @@ frontend beside a service, and reviewing only one of them is a silent
 half-review.
 
 **No marker matches** — report no stack detected, skip all command-running,
-return four empty finding sets, and still produce a valid ten-key `review.json`.
+return empty finding sets for every domain, and still produce a valid
+eleven-key `review.json`.
 A docs repo is a legitimate input, not an error.
 
 ## Commands per stack

@@ -20,8 +20,11 @@ jobs:
         node: [18, 20, 22]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Pinned to SHAs, not floating major tags. This job is the only thing
+      # asserting that the grounding gate still reproduces its fixture, so a
+      # retagged upstream action could make a broken gate look healthy.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node }}
 
@@ -29,6 +32,12 @@ jobs:
       # way is a feature worth testing for.
       - name: Unit tests (grounding gate)
         run: node --test scripts/merge-review.test.mjs
+
+      # Includes the symlink-containment cases, which skip on Windows because
+      # they need privilege there — the ubuntu and macos legs are what actually
+      # exercise them.
+      - name: Unit tests (supporting scripts)
+        run: node --test scripts/tools.test.mjs
 
       - name: Regression — demo-repo reproduces expected-review.json
         shell: bash

@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Actions are pinned to commit SHAs in the workflow. Without this, a pinned
+  # SHA is a SHA that never moves and quietly rots; the pin and the update tool
+  # are two halves of one control, not alternatives.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+
+  # No npm entry: this project has zero runtime dependencies and no manifest,
+  # deliberately. If that ever changes, add one here.

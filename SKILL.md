@@ -48,7 +48,7 @@ typecheck, test, and audit. Prefer scripts defined in the manifest; probe each
 tool with `--version` before relying on it.
 
 No recognized stack is a valid outcome: skip command-running, and still produce
-a complete ten-key `review.json` with empty finding sets.
+a complete eleven-key `review.json` with empty finding sets.
 
 ## Step 2 — load project memory
 
@@ -150,6 +150,20 @@ one bad slice and will report the failure explicitly. Do not "fix" a slice by
 rewriting it into JSON yourself; that would put you back in the business of
 authoring findings, which is the split this design exists to maintain.
 
+### Artifacts quote real source — check where they land
+
+`review.json` and `review-debug.json` embed verbatim lines from the repo,
+including any credential a reviewer found. Before writing them, run
+`git check-ignore -q <out>` — and if the output directory is **not** ignored,
+say so plainly once, in the report:
+
+> `.claude/review/` is not gitignored here, and the artifacts contain verbatim
+> quoted source. Consider ignoring it or rerunning with `--out`.
+
+Do not edit `.gitignore` yourself. Say it once and move on — a repo that has
+chosen to commit its review artifacts is making a legitimate choice, and
+nagging about it every run is how a warning stops being read.
+
 ## Step 4 — prove nothing was mutated
 
 ```
@@ -182,7 +196,7 @@ Write your cross-domain summary prose to `<out>/summary.txt` first; the script
 appends the machine-generated accounting (accepted/rejected counts, suppression
 count, integrity result, assumptions) to it.
 
-The script produces `review.json` (the ten-key contract), a timestamped sibling,
+The script produces `review.json` (the eleven-key contract), a timestamped sibling,
 and `review-debug.json` (`_rejected`, `_suppressed`, `_assumptions`, `_stale`).
 
 **If Node is unavailable** (a Go or Rust repo with no Node installed): merge in

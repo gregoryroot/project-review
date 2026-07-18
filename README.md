@@ -89,6 +89,15 @@ You should want this section to exist before running it.
 - runs `git stash`, `checkout`, `reset`, or `clean`;
 - sends your code anywhere beyond the model calls Claude Code already makes.
 
+**The artifacts contain verbatim lines from your source.** That is what makes
+findings checkable, but it has a consequence worth stating: if a reviewer finds
+a credential — including one in a file you deliberately left untracked, like a
+local `.env` — that value is quoted into `review.json` and `review-debug.json`
+as plaintext, in your working tree, where a later `git add .` would commit it.
+Rotating the original does not revoke those copies. Either gitignore
+`.claude/review/`, or use `--out` to keep artifacts outside the repository
+entirely.
+
 The read-only claim is **audited, not asserted**: the skill snapshots
 `git status --porcelain` before the review and diffs it afterward. Any tracked
 file that became dirty is reported at the top of the report as a defect *in the

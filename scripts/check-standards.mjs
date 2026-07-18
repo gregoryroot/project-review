@@ -91,7 +91,7 @@ const SOURCES = {
  * rolling `latest`. Extract rather than exact-match, and skip anything with no
  * version in it at all.
  */
-function firstSemverTag(releases) {
+export function firstSemverTag(releases) {
   if (!Array.isArray(releases)) return null;
   for (const r of releases) {
     if (r?.draft || r?.prerelease) continue;
@@ -109,7 +109,7 @@ function firstSemverTag(releases) {
  * indistinguishable from no tripwire — which is the failure this whole layer
  * exists to avoid.
  */
-function plausibleEdition(s) {
+export function plausibleEdition(s) {
   const v = String(s ?? '').trim();
   if (!v) return false;
   return /^v?\d+(\.\d+){0,2}$/.test(v) || /^20\d\d$/.test(v);
@@ -133,9 +133,11 @@ async function probeOne(key, spec, timeoutMs) {
   }
 }
 
-function normalize(s) {
+export function normalize(s) {
   return String(s ?? '').trim().replace(/^v/i, '').toLowerCase();
 }
+
+export { SOURCES };
 
 async function main() {
   const wantPatch = process.argv.includes('--patch');
@@ -231,7 +233,14 @@ async function main() {
   if (changed.length) process.exitCode = 1;
 }
 
-main().catch((err) => {
-  console.error(`check-standards: ${err.message}`);
-  process.exit(2);
-});
+// Only run when invoked directly. Importing this module for tests must not
+// fire off seven network requests.
+const invokedDirectly = process.argv[1]
+  && path.resolve(process.argv[1]).endsWith('check-standards.mjs');
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(`check-standards: ${err.message}`);
+    process.exit(2);
+  });
+}

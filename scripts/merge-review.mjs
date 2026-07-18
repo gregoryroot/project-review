@@ -17,7 +17,9 @@
  * Zero dependencies. Node >= 18.
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, statSync } from 'node:fs';
+import {
+  readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, statSync, realpathSync,
+} from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -107,6 +109,23 @@ export function safeResolve(repoRoot, rel) {
   return full;
 }
 
+/**
+ * Containment re-check after following symlinks. Both ends are realpath'd, so a
+ * repo reached through a link (a common checkout layout, and how this skill is
+ * installed) does not fail closed.
+ */
+export function containsRealPath(repoRoot, full) {
+  let realRoot, realFull;
+  try {
+    realRoot = realpathSync(path.resolve(repoRoot));
+    realFull = realpathSync(full);
+  } catch {
+    return false; // cannot resolve: refuse rather than guess
+  }
+  if (realFull === realRoot) return true;
+  return realFull.startsWith(realRoot.endsWith(path.sep) ? realRoot : realRoot + path.sep);
+}
+
 // ---------------------------------------------------------------------------
 // 1. parse — one reviewer returning prose must not discard the other three
 // ---------------------------------------------------------------------------
@@ -181,6 +200,16 @@ export function verifyEvidence(repoRoot, ev) {
   }
 
   if (!existsSync(full)) return { ok: false, reason: `file does not exist: ${rel}` };
+
+  // safeResolve's containment is lexical, which a symlink inside the repo
+  // defeats: `docs/notes -> ~/.ssh/id_rsa` resolves to a path that looks
+  // contained and is not. Re-check after resolving links, and do it *here*
+  // rather than in safeResolve — the line: 0 absence branch above requires the
+  // path NOT to exist, and realpath on a missing path throws.
+  if (!containsRealPath(repoRoot, full)) {
+    return { ok: false, reason: `evidence path resolves outside repo root via a link: ${rel}` };
+  }
+
   let st;
   try { st = statSync(full); } catch { return { ok: false, reason: `cannot stat: ${rel}` }; }
   if (st.isDirectory()) return { ok: false, reason: `evidence path is a directory: ${rel}` };
