@@ -15,9 +15,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import {
-  parseSlice, safeResolve, verifyEvidence, acceptFindings,
+  parseSlice, safeResolve, verifyEvidence, acceptFindings, cleanStandards,
   parseMemory, validateMemory, suppress, clusterFindings, rankIssues, collate,
 } from './merge-review.mjs';
+import { parseFreshnessTable, checkFreshness } from './standards-freshness.mjs';
 
 // --- fixture repo -----------------------------------------------------------
 
@@ -53,9 +54,9 @@ function finding(over = {}) {
 // --- parse ------------------------------------------------------------------
 
 test('parseSlice strips code fences', () => {
-  const r = parseSlice('```json\n{"slice":"security-privacy","findings":[]}\n```');
+  const r = parseSlice('```json\n{"slice":"security-appsec","findings":[]}\n```');
   assert.equal(r.ok, true);
-  assert.equal(r.slice, 'security-privacy');
+  assert.equal(r.slice, 'security-appsec');
 });
 
 test('parseSlice tolerates prose around the JSON', () => {
@@ -94,7 +95,7 @@ test('safeResolve rejects absolute paths', () => {
 
 test('a traversing evidence path is rejected, not read', () => {
   const root = makeRepo();
-  const { accepted, rejected } = acceptFindings(root, 'security-privacy', [
+  const { accepted, rejected } = acceptFindings(root, 'security-appsec', [
     finding({ evidence: [{ file: '../../.ssh/id_rsa', line: 1, quote: 'PRIVATE KEY' }] }),
   ]);
   assert.equal(accepted.length, 0);
@@ -106,14 +107,14 @@ test('a traversing evidence path is rejected, not read', () => {
 
 test('a real quote at the right line is accepted', () => {
   const root = makeRepo();
-  const { accepted, rejected } = acceptFindings(root, 'security-privacy', [finding()]);
+  const { accepted, rejected } = acceptFindings(root, 'security-appsec', [finding()]);
   assert.equal(accepted.length, 1, JSON.stringify(rejected));
   rmSync(root, { recursive: true, force: true });
 });
 
 test('a fabricated quote is rejected', () => {
   const root = makeRepo();
-  const { accepted, rejected } = acceptFindings(root, 'security-privacy', [
+  const { accepted, rejected } = acceptFindings(root, 'security-appsec', [
     finding({ evidence: [{ file: 'src/client.js', line: 2, quote: 'const SECRET = "totally-invented"' }] }),
   ]);
   assert.equal(accepted.length, 0);
@@ -123,7 +124,7 @@ test('a fabricated quote is rejected', () => {
 
 test('a line past EOF is rejected', () => {
   const root = makeRepo();
-  const { accepted, rejected } = acceptFindings(root, 'security-privacy', [
+  const { accepted, rejected } = acceptFindings(root, 'security-appsec', [
     finding({ evidence: [{ file: 'src/client.js', line: 900, quote: 'anything' }] }),
   ]);
   assert.equal(accepted.length, 0);
@@ -133,7 +134,7 @@ test('a line past EOF is rejected', () => {
 
 test('a quote off by two lines still verifies (±3 window)', () => {
   const root = makeRepo();
-  const { accepted } = acceptFindings(root, 'security-privacy', [
+  const { accepted } = acceptFindings(root, 'security-appsec', [
     finding({ evidence: [{ file: 'src/client.js', line: 4, quote: 'process.env.API_KEY' }] }),
   ]);
   assert.equal(accepted.length, 1);
@@ -142,7 +143,7 @@ test('a quote off by two lines still verifies (±3 window)', () => {
 
 test('whitespace differences do not break a quote match', () => {
   const root = makeRepo();
-  const { accepted } = acceptFindings(root, 'security-privacy', [
+  const { accepted } = acceptFindings(root, 'security-appsec', [
     finding({ evidence: [{ file: 'src/client.js', line: 2, quote: 'process.env.API_KEY   ||   "sk-demo-abc"' }] }),
   ]);
   assert.equal(accepted.length, 1);
@@ -151,7 +152,7 @@ test('whitespace differences do not break a quote match', () => {
 
 test('one bad evidence item kills the whole finding', () => {
   const root = makeRepo();
-  const { accepted } = acceptFindings(root, 'security-privacy', [
+  const { accepted } = acceptFindings(root, 'security-appsec', [
     finding({
       evidence: [
         { file: 'src/client.js', line: 2, quote: 'process.env.API_KEY' },
@@ -165,7 +166,7 @@ test('one bad evidence item kills the whole finding', () => {
 
 test('a finding with no evidence is rejected', () => {
   const root = makeRepo();
-  const { accepted, rejected } = acceptFindings(root, 'security-privacy', [finding({ evidence: [] })]);
+  const { accepted, rejected } = acceptFindings(root, 'security-appsec', [finding({ evidence: [] })]);
   assert.equal(accepted.length, 0);
   assert.match(rejected[0].reason, /no evidence/);
   rmSync(root, { recursive: true, force: true });
@@ -214,7 +215,7 @@ test('line 0 without an ABSENT: quote is rejected', () => {
 
 test('an off-slice domain is dropped', () => {
   const root = makeRepo();
-  const { accepted, rejected } = acceptFindings(root, 'security-privacy', [finding({ domain: 'performance' })]);
+  const { accepted, rejected } = acceptFindings(root, 'security-appsec', [finding({ domain: 'performance' })]);
   assert.equal(accepted.length, 0);
   assert.match(rejected[0].reason, /outside slice/);
   rmSync(root, { recursive: true, force: true });
@@ -222,7 +223,7 @@ test('an off-slice domain is dropped', () => {
 
 test('inferred + high is downgraded to medium, not dropped', () => {
   const root = makeRepo();
-  const { accepted } = acceptFindings(root, 'security-privacy', [finding({ confidence: 'inferred' })]);
+  const { accepted } = acceptFindings(root, 'security-appsec', [finding({ confidence: 'inferred' })]);
   assert.equal(accepted.length, 1);
   assert.equal(accepted[0].severity, 'medium');
   assert.match(accepted[0].downgraded, /downgraded from high/);
@@ -231,7 +232,7 @@ test('inferred + high is downgraded to medium, not dropped', () => {
 
 test('inferred + medium is left alone', () => {
   const root = makeRepo();
-  const { accepted } = acceptFindings(root, 'security-privacy', [finding({ confidence: 'inferred', severity: 'medium' })]);
+  const { accepted } = acceptFindings(root, 'security-appsec', [finding({ confidence: 'inferred', severity: 'medium' })]);
   assert.equal(accepted[0].severity, 'medium');
   assert.equal(accepted[0].downgraded, undefined);
   rmSync(root, { recursive: true, force: true });
@@ -240,12 +241,12 @@ test('inferred + medium is left alone', () => {
 // --- dedupe -----------------------------------------------------------------
 
 test('two slices on one line dedupe to one issue with corroboration 2', () => {
-  const a = { ...finding(), slice: 'security-privacy', domain: 'security' };
+  const a = { ...finding(), slice: 'security-appsec', domain: 'security' };
   const b = {
     ...finding({ domain: 'privacy', title: 'credential exposed in tracked source', severity: 'medium' }),
-    slice: 'security-privacy',
+    slice: 'security-appsec',
   };
-  b.slice = 'performance-maintainability';
+  b.slice = 'performance-observability';
   b.domain = 'maintainability';
   const clusters = clusterFindings([a, b]);
   assert.equal(clusters.length, 1);
@@ -255,23 +256,23 @@ test('two slices on one line dedupe to one issue with corroboration 2', () => {
 });
 
 test('the same slice twice does not inflate corroboration', () => {
-  const a = { ...finding(), slice: 'security-privacy' };
-  const b = { ...finding({ title: 'other wording' }), slice: 'security-privacy' };
+  const a = { ...finding(), slice: 'security-appsec' };
+  const b = { ...finding({ title: 'other wording' }), slice: 'security-appsec' };
   const clusters = clusterFindings([a, b]);
   assert.equal(clusters.length, 1);
   assert.equal(clusters[0].corroboration, 1);
 });
 
 test('findings far apart in one file stay separate', () => {
-  const a = { ...finding(), slice: 'security-privacy' };
+  const a = { ...finding(), slice: 'security-appsec' };
   const b = {
     ...finding({ evidence: [{ file: 'src/client.js', line: 4, quote: 'SELECT * FROM t WHERE id' }] }),
-    slice: 'security-privacy',
+    slice: 'security-appsec',
   };
   // lines 2 and 4 land in bucket 0 -> same cluster; check a genuinely distant one
   const c = {
     ...finding({ evidence: [{ file: 'src/other.js', line: 40, quote: 'x' }] }),
-    slice: 'security-privacy',
+    slice: 'security-appsec',
   };
   assert.equal(clusterFindings([a, b]).length, 1);
   assert.equal(clusterFindings([a, c]).length, 2);
@@ -330,7 +331,7 @@ test('an entry naming a deleted file is flagged stale and not applied', () => {
 test('suppression matches on file + domain, and reports what matched', () => {
   const root = makeRepo();
   const { live } = validateMemory(root, parseMemory(MEMORY));
-  const f = { ...finding({ severity: 'medium' }), slice: 'security-privacy' };
+  const f = { ...finding({ severity: 'medium' }), slice: 'security-appsec' };
   const { kept, suppressed } = suppress([f], live);
   assert.equal(kept.length, 0);
   assert.equal(suppressed.length, 1);
@@ -341,7 +342,7 @@ test('suppression matches on file + domain, and reports what matched', () => {
 test('a different domain on the same file is not suppressed', () => {
   const root = makeRepo();
   const { live } = validateMemory(root, parseMemory(MEMORY));
-  const f = { ...finding({ severity: 'medium', domain: 'privacy' }), slice: 'security-privacy' };
+  const f = { ...finding({ severity: 'medium', domain: 'privacy' }), slice: 'security-appsec' };
   const { kept } = suppress([f], live);
   assert.equal(kept.length, 1);
   rmSync(root, { recursive: true, force: true });
@@ -350,7 +351,7 @@ test('a different domain on the same file is not suppressed', () => {
 test('a verdict never suppresses a high finding; it annotates it', () => {
   const root = makeRepo();
   const { live } = validateMemory(root, parseMemory(MEMORY));
-  const { kept, suppressed } = suppress([{ ...finding(), slice: 'security-privacy' }], live);
+  const { kept, suppressed } = suppress([{ ...finding(), slice: 'security-appsec' }], live);
   assert.equal(suppressed.length, 0);
   assert.equal(kept.length, 1);
   assert.match(kept[0].note, /severity increased since/);
@@ -364,9 +365,9 @@ test('one reviewer returning prose does not discard the other three', () => {
   const { review, debug } = collate({
     repoRoot: root,
     slices: [
-      { slice: 'security-privacy', raw: JSON.stringify({ slice: 'security-privacy', findings: [finding()] }) },
+      { slice: 'security-appsec', raw: JSON.stringify({ slice: 'security-appsec', findings: [finding()] }) },
       { slice: 'tests-correctness', raw: 'I could not run the suite, sorry.' },
-      { slice: 'performance-maintainability', raw: JSON.stringify({ slice: 'performance-maintainability', findings: [] }) },
+      { slice: 'performance-observability', raw: JSON.stringify({ slice: 'performance-observability', findings: [] }) },
       { slice: 'infra-supplychain', raw: JSON.stringify({ slice: 'infra-supplychain', findings: [] }) },
     ],
   });
@@ -376,14 +377,150 @@ test('one reviewer returning prose does not discard the other three', () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test('collate emits exactly the ten contract keys, in order', () => {
+test('collate emits exactly the eleven contract keys, in order', () => {
   const root = makeRepo();
   const { review } = collate({ repoRoot: root, slices: [] });
   assert.deepEqual(Object.keys(review), [
-    'summary', 'issues', 'tests', 'security', 'privacy',
+    'summary', 'issues', 'tests', 'security', 'privacy', 'accessibility',
     'performance', 'maintainability', 'infra', 'patches', 'roadmap',
   ]);
   assert.ok(review.summary.length > 0, 'summary is never empty, even with no findings');
+  rmSync(root, { recursive: true, force: true });
+});
+
+// --- standards citations ----------------------------------------------------
+
+test('well-formed standard identifiers survive', () => {
+  const { kept, dropped } = cleanStandards(['CWE-862', 'ASVS-V8.1', 'API1:2023']);
+  assert.deepEqual(kept, ['CWE-862', 'ASVS-V8.1', 'API1:2023']);
+  assert.equal(dropped.length, 0);
+});
+
+test('every documented identifier form is accepted', () => {
+  const forms = ['CWE-79', 'ASVS-V11', 'LLM01:2025', 'WCAG-2.5.8', 'Scorecard:Token-Permissions'];
+  for (const f of forms) {
+    assert.deepEqual(cleanStandards([f]).kept, [f], `${f} should be accepted`);
+  }
+  assert.deepEqual(cleanStandards(['SLSA-Build-L2']).kept, ['SLSA-Build-L2']);
+  assert.deepEqual(cleanStandards(['SSDF-PW.4.1']).kept, ['SSDF-PW.4.1']);
+});
+
+test('a malformed citation is dropped but the finding survives', () => {
+  const root = makeRepo();
+  const { accepted } = acceptFindings(root, 'security-appsec', [
+    finding({ standard: ['CWE-89', 'OWASP is good', 'ASVS-V1.2'] }),
+  ]);
+  assert.equal(accepted.length, 1, 'a bad footnote must not kill a grounded defect');
+  assert.deepEqual(accepted[0].standard, ['CWE-89', 'ASVS-V1.2']);
+  assert.deepEqual(accepted[0].droppedStandards, ['OWASP is good']);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('citations are capped at three', () => {
+  const { kept } = cleanStandards(['CWE-79', 'CWE-89', 'CWE-22', 'CWE-78']);
+  assert.equal(kept.length, 3);
+});
+
+test('a finding with no citations is still accepted', () => {
+  const root = makeRepo();
+  const { accepted } = acceptFindings(root, 'security-appsec', [finding()]);
+  assert.equal(accepted.length, 1);
+  assert.deepEqual(accepted[0].standard, []);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('clustered findings union their citations', () => {
+  const a = { ...finding({ standard: ['CWE-89'] }), slice: 'security-appsec', standard: ['CWE-89'] };
+  const b = { ...finding({ standard: ['ASVS-V1.2'] }), slice: 'security-authz-identity', standard: ['ASVS-V1.2'] };
+  const clusters = clusterFindings([a, b]);
+  assert.deepEqual(clusters[0].standard, ['ASVS-V1.2', 'CWE-89']);
+});
+
+// --- accessibility slice ----------------------------------------------------
+
+test('an accessibility finding lands in its own key, not maintainability', () => {
+  const root = makeRepo();
+  const { review } = collate({
+    repoRoot: root,
+    slices: [{
+      slice: 'accessibility',
+      raw: JSON.stringify({
+        slice: 'accessibility',
+        findings: [finding({ domain: 'accessibility', severity: 'medium', standard: ['WCAG-2.5.8'] })],
+      }),
+    }],
+  });
+  assert.equal(review.accessibility.length, 1);
+  assert.equal(review.maintainability.length, 0);
+  assert.deepEqual(review.accessibility[0].standard, ['WCAG-2.5.8']);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('the ai-llm slice may emit security and privacy but not infra', () => {
+  const root = makeRepo();
+  const ok = acceptFindings(root, 'ai-llm', [finding({ domain: 'privacy', severity: 'medium' })]);
+  assert.equal(ok.accepted.length, 1);
+  const bad = acceptFindings(root, 'ai-llm', [finding({ domain: 'infra', severity: 'medium' })]);
+  assert.equal(bad.accepted.length, 0);
+  rmSync(root, { recursive: true, force: true });
+});
+
+// --- standards freshness tripwire -------------------------------------------
+
+const FRESHNESS_MD = `# Standards index
+
+## Freshness
+
+| Key | Standard | Edition | Checked | Cadence |
+|---|---|---|---|---|
+| cwe-top25 | CWE Top 25 | 2025 | 2026-07-18 | annual |
+| wcag | W3C WCAG | 2.2 | 2020-01-01 | rare |
+| bogus | Bad Row | 1 | not-a-date | annual |
+
+## Something else
+| this | table | is | not | parsed |
+`;
+
+test('parseFreshnessTable reads only the Freshness table', () => {
+  const { rows, malformed } = parseFreshnessTable(FRESHNESS_MD);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((r) => r.key), ['cwe-top25', 'wcag']);
+  assert.equal(malformed.length, 1);
+  assert.match(malformed[0].reason, /bad Checked date/);
+});
+
+test('a standard within its cadence budget is not flagged', () => {
+  const { overdue, fresh } = checkFreshness(FRESHNESS_MD, new Date('2027-01-01T00:00:00Z'));
+  assert.ok(fresh.some((f) => f.key === 'cwe-top25'), 'annual standard at 5mo is still fresh');
+  assert.ok(!overdue.some((o) => o.key === 'cwe-top25'));
+});
+
+test('a standard past its cadence budget is flagged with a maintenance note', () => {
+  const { overdue, note } = checkFreshness(FRESHNESS_MD, new Date('2027-10-01T00:00:00Z'));
+  assert.ok(overdue.some((o) => o.key === 'cwe-top25'), 'annual standard at 14mo is overdue');
+  assert.match(note, /CWE Top 25/);
+  assert.match(note, /not a finding about the repo under review/);
+  assert.match(note, /check-standards/);
+});
+
+test('freshness is reported in debug and never leaks into repo findings', () => {
+  const root = makeRepo();
+  const { review, debug } = collate({
+    repoRoot: root,
+    slices: [],
+    standardsMd: FRESHNESS_MD,
+  });
+  assert.ok(debug._standardsFreshness.note, 'the stale WCAG row should produce a note');
+  assert.equal(review.issues.length, 0, 'a stale standards index is not a finding about the repo');
+  assert.ok(!/standards index/i.test(review.summary), 'the note stays out of the repo-facing summary');
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('an absent standards index degrades quietly rather than crashing', () => {
+  const root = makeRepo();
+  const { debug } = collate({ repoRoot: root, slices: [] });
+  assert.equal(debug._standardsFreshness.note, null);
+  assert.deepEqual(debug._standardsFreshness.overdue, []);
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -393,9 +530,9 @@ test('patches are hoisted, numbered, deduped, and back-linked', () => {
   const { review } = collate({
     repoRoot: root,
     slices: [
-      { slice: 'security-privacy', raw: JSON.stringify({ slice: 'security-privacy', findings: [finding({ patch: diff })] }) },
-      { slice: 'performance-maintainability', raw: JSON.stringify({
-        slice: 'performance-maintainability',
+      { slice: 'security-appsec', raw: JSON.stringify({ slice: 'security-appsec', findings: [finding({ patch: diff })] }) },
+      { slice: 'performance-observability', raw: JSON.stringify({
+        slice: 'performance-observability',
         findings: [finding({ domain: 'maintainability', severity: 'low', patch: diff })],
       }) },
     ],
@@ -425,8 +562,8 @@ test('summary reports the suppression count so it is never silent', () => {
     repoRoot: root,
     memoryMd: MEMORY,
     slices: [{
-      slice: 'security-privacy',
-      raw: JSON.stringify({ slice: 'security-privacy', findings: [finding({ severity: 'medium' })] }),
+      slice: 'security-appsec',
+      raw: JSON.stringify({ slice: 'security-appsec', findings: [finding({ severity: 'medium' })] }),
     }],
   });
   assert.equal(review.issues.length, 0);
@@ -441,9 +578,9 @@ test('roadmap collapses so no two entries touch the same file', () => {
   const { review } = collate({
     repoRoot: root,
     slices: [{
-      slice: 'security-privacy',
+      slice: 'security-appsec',
       raw: JSON.stringify({
-        slice: 'security-privacy',
+        slice: 'security-appsec',
         findings: [
           finding(),
           finding({ severity: 'medium', evidence: [{ file: 'src/client.js', line: 4, quote: 'SELECT * FROM t' }] }),

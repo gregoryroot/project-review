@@ -1,0 +1,5 @@
+# This repo is authored on Windows and published for macOS and Linux. Normalize
+# to LF in the object store so the demo fixture's line numbers — which
+# examples/expected-review.json is pinned to — are identical on every platform.
+* text=auto eol=lf
+*.png binary

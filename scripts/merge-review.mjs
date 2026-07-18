@@ -19,22 +19,58 @@
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { checkFreshness } from './standards-freshness.mjs';
 
 // ---------------------------------------------------------------------------
 // constants
 // ---------------------------------------------------------------------------
 
 export const SLICE_DOMAINS = {
-  'security-privacy': ['security', 'privacy'],
+  // core — always spawned
+  'security-appsec': ['security'],
+  'security-authz-identity': ['security'],
+  'privacy-data': ['privacy'],
   'tests-correctness': ['tests'],
-  'performance-maintainability': ['performance', 'maintainability'],
+  'performance-observability': ['performance', 'maintainability'],
   'infra-supplychain': ['infra'],
+  // conditional — spawned only when the repo has the relevant markers
+  'accessibility': ['accessibility'],
+  'ai-llm': ['security', 'privacy'],
 };
 
 export const SEVERITY_RANK = { high: 3, medium: 2, low: 1, info: 0 };
 export const DOMAIN_PRIORITY = {
-  security: 0, privacy: 1, tests: 2, infra: 3, performance: 4, maintainability: 5,
+  security: 0, privacy: 1, tests: 2, infra: 3,
+  accessibility: 4, performance: 5, maintainability: 6,
 };
+
+/**
+ * Citation forms accepted on a finding's `standard[]`. A malformed identifier is
+ * dropped rather than failing the finding: a bad citation is noise, but the
+ * grounded defect underneath it is still real. See reference/standards.md.
+ */
+export const STANDARD_PATTERNS = [
+  /^CWE-\d+$/,
+  /^ASVS-V\d+(\.\d+){0,2}$/,
+  /^API\d{1,2}:2023$/,
+  /^LLM\d{2}:2025$/,
+  /^WCAG-\d+\.\d+\.\d+$/,
+  /^Scorecard:[A-Za-z-]+$/,
+  /^SLSA-Build-L[0-3]$/,
+  /^SSDF-[A-Z]{2}\.\d+(\.\d+)?$/,
+];
+
+export function cleanStandards(value) {
+  if (!Array.isArray(value)) return { kept: [], dropped: [] };
+  const kept = [], dropped = [];
+  for (const s of value.slice(0, 3)) {
+    const id = String(s).trim();
+    (STANDARD_PATTERNS.some((re) => re.test(id)) ? kept : dropped).push(id);
+  }
+  return { kept, dropped };
+}
 
 const QUOTE_WINDOW = 3; // lines either side of the claimed line
 
@@ -207,6 +243,10 @@ export function acceptFindings(repoRoot, slice, findings) {
 
     const out = { ...f, slice, evidence: f.evidence.map((e) => ({ ...e, file: toPosix(e.file) })) };
 
+    const std = cleanStandards(f.standard);
+    out.standard = std.kept;
+    if (std.dropped.length) out.droppedStandards = std.dropped;
+
     // inferred may not be high: downgrade, do not drop
     if (out.confidence === 'inferred' && out.severity === 'high') {
       out.severity = 'medium';
@@ -339,6 +379,7 @@ export function clusterFindings(findings) {
       detail: worst.detail,
       impact: worst.impact,
       domains,
+      standard: [...new Set(m.flatMap((x) => x.standard || []))].sort(),
       anchor: c.anchor,
       evidence: m.flatMap((x) => x.evidence),
       repro,
@@ -391,7 +432,7 @@ export function buildRoadmap(issues) {
 // 6. collate
 // ---------------------------------------------------------------------------
 
-export function collate({ repoRoot, slices, memoryMd = '', summary = '', integrity = null }) {
+export function collate({ repoRoot, slices, memoryMd = '', summary = '', integrity = null, standardsMd = '' }) {
   const rejected = [], assumptions = [], parseFailures = [];
   let acceptedAll = [], testEntries = [];
 
@@ -438,7 +479,10 @@ export function collate({ repoRoot, slices, memoryMd = '', summary = '', integri
     patchesByIssue.get(p.sourceIssueId).push(p.id);
   }
 
-  const byDomain = { security: [], privacy: [], performance: [], maintainability: [], infra: [] };
+  const byDomain = {
+    security: [], privacy: [], performance: [],
+    maintainability: [], infra: [], accessibility: [],
+  };
   let n = 0;
   for (const c of ranked) {
     for (const m of c.members) {
@@ -451,6 +495,7 @@ export function collate({ repoRoot, slices, memoryMd = '', summary = '', integri
         confidence: m.confidence,
         detail: m.detail,
         impact: m.impact,
+        standard: m.standard,
         evidence: m.evidence,
         repro: m.repro || undefined,
         downgraded: m.downgraded || undefined,
@@ -465,6 +510,7 @@ export function collate({ repoRoot, slices, memoryMd = '', summary = '', integri
     severity: c.severity,
     confidence: c.confidence,
     domains: c.domains,
+    standard: c.standard,
     detail: c.detail,
     impact: c.impact,
     evidence: c.evidence,
@@ -498,6 +544,7 @@ export function collate({ repoRoot, slices, memoryMd = '', summary = '', integri
     tests: testEntries,
     security: byDomain.security,
     privacy: byDomain.privacy,
+    accessibility: byDomain.accessibility,
     performance: byDomain.performance,
     maintainability: byDomain.maintainability,
     infra: byDomain.infra,
@@ -505,7 +552,12 @@ export function collate({ repoRoot, slices, memoryMd = '', summary = '', integri
     roadmap: buildRoadmap(ranked),
   };
 
+  // A tool-maintenance note, deliberately kept out of `summary`: the reader of a
+  // repo review is not the person who maintains this skill's standards index.
+  const freshness = checkFreshness(standardsMd);
+
   const debug = {
+    _standardsFreshness: freshness,
     _rejected: rejected,
     _suppressed: suppressed,
     _assumptions: assumptions,
@@ -549,6 +601,10 @@ function main() {
       raw: readFileSync(path.join(inDir, f), 'utf8'),
     }));
 
+  const skillDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const standardsPath = args.standards || path.join(skillDir, 'reference', 'standards.md');
+  const standardsMd = existsSync(standardsPath) ? readFileSync(standardsPath, 'utf8') : '';
+
   const memoryMd = args.memory && existsSync(args.memory) ? readFileSync(args.memory, 'utf8') : '';
   const summary = args.summary && existsSync(args.summary) ? readFileSync(args.summary, 'utf8') : '';
 
@@ -565,7 +621,7 @@ function main() {
     integrity = { baseline, after, newlyDirty };
   }
 
-  const { review, debug } = collate({ repoRoot, slices, memoryMd, summary, integrity });
+  const { review, debug } = collate({ repoRoot, slices, memoryMd, summary, integrity, standardsMd });
 
   mkdirSync(outDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -575,6 +631,7 @@ function main() {
 
   console.log(`merge-review: ${review.issues.length} issues, ${debug._rejected.length} rejected, ${debug._suppressed.length} suppressed`);
   console.log(`wrote ${toPosix(path.join(outDir, 'review.json'))}`);
+  if (debug._standardsFreshness.note) console.warn(`\n[maintenance] ${debug._standardsFreshness.note}`);
 }
 
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]).endsWith('merge-review.mjs');
