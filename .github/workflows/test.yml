@@ -1,0 +1,40 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # The matrix is not ceremony. This skill was authored on Windows and is
+    # published for macOS and Linux; it is what catches path-separator bugs
+    # before someone else hits them.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [18, 20, 22]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # No install step: the skill has zero dependencies, and keeping it that
+      # way is a feature worth testing for.
+      - name: Unit tests (grounding gate)
+        run: node --test scripts/merge-review.test.mjs
+
+      - name: Regression — demo-repo reproduces expected-review.json
+        shell: bash
+        run: |
+          node scripts/merge-review.mjs \
+            --repo examples/demo-repo \
+            --in examples/slices \
+            --out "$RUNNER_TEMP/out"
+          node scripts/assert-fixture.mjs "$RUNNER_TEMP/out/review.json" examples/expected-review.json
