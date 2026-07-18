@@ -1,0 +1,20 @@
+{
+  "name": "demo-profile-service",
+  "version": "0.3.1",
+  "private": true,
+  "description": "Deliberately flawed fixture repo. See README.md.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "express": "4.17.1",
+    "sqlite3": "5.0.2"
+  },
+  "devDependencies": {
+    "eslint": "8.57.0"
+  }
+}

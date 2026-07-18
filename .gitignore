@@ -1,0 +1,12 @@
+# Review artifacts. PROJECT-REVIEW.md is deliberately NOT ignored — it is the
+# committed team artifact. Everything else under .claude/review/ is per-run.
+.claude/review/*.json
+.claude/review/*.md
+!.claude/review/PROJECT-REVIEW.md
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Node
+node_modules/
+npm-debug.log*
