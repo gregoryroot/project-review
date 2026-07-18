@@ -10,3 +10,6 @@
 # Node
 node_modules/
 npm-debug.log*
+
+# Scratch output from local merge runs; examples/expected-review.json is the committed fixture
+examples/out/

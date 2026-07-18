@@ -1,0 +1,94 @@
+{
+  "slice": "infra-supplychain",
+  "findings": [
+    {
+      "domain": "infra",
+      "title": "No CI configuration at all, so the existing test suite gates nothing",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["Scorecard:CI-Tests", "Scorecard:SAST"],
+      "detail": "package.json declares a runnable suite and a lint script, but the repo contains no workflow directory of any kind: no .github/workflows, no .gitlab-ci.yml, no Jenkinsfile, no circle or travis config. Nothing executes the tests or the lint on push or on a pull request, and there is no SAST step either. The suite is real code that runs only when someone remembers to run it locally.",
+      "impact": "Any change to the validators, routes, or data layer can be merged with the suite red or the lint gate failing, and nobody finds out until runtime. The one automated quality signal this repo possesses is never consulted.",
+      "evidence": [
+        { "file": ".github/workflows", "line": 0, "quote": "ABSENT: glob '.github/workflows/*.{yml,yaml}' returned 0 files" },
+        { "file": "package.json", "line": 10, "quote": "\"test\": \"node --test test/\"" }
+      ]
+    },
+    {
+      "domain": "infra",
+      "title": "No lockfile, so transitive dependencies of express and sqlite3 resolve differently on every install",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["Scorecard:Pinned-Dependencies", "SSDF-PW.4.1"],
+      "detail": "package.json declares express, sqlite3 and eslint, but no package-lock.json, npm-shrinkwrap.json, yarn.lock or pnpm-lock.yaml exists. The direct versions are pinned exactly, so the top level is stable - the entire transitive closure underneath them is not. Two developers installing a week apart get different dependency trees from the same commit. `npm ci` cannot be used at all: it requires a lockfile and exits non-zero without one.",
+      "impact": "Builds are not reproducible from the commit; a transitive package published between two installs silently enters the tree. It also removes the integrity-hash check that a lockfile provides, which is the mechanism that would catch a tampered or substituted transitive package.",
+      "evidence": [
+        { "file": "package-lock.json", "line": 0, "quote": "ABSENT: glob '{package-lock.json,npm-shrinkwrap.json,yarn.lock,pnpm-lock.yaml}' returned 0 files" },
+        { "file": "package.json", "line": 14, "quote": "\"express\": \"4.17.1\"" }
+      ]
+    },
+    {
+      "domain": "infra",
+      "title": "GEO_API_KEY is read at startup but documented nowhere, and there is no .env.example",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["API8:2023"],
+      "detail": "src/client.js is the only process.env read in the repo. The variable name appears in no other file - README.md does not mention it, there is no .env.example, and there is no CI config that would otherwise document it. Worse than an undocumented variable that fails loudly: because of the fallback the service starts and serves traffic with the placeholder key, so a deployment that forgot to set it looks healthy and only fails at the third-party call - which the empty catch swallows. The hardcoded literal itself is the security slice's territory; the infra defect is that the deploy-time contract is written down nowhere.",
+      "impact": "A new contributor or a new environment has no way to learn the variable exists short of reading src/client.js. Misconfiguration is undetectable at boot and silently degrades enrichment rather than failing the deploy.",
+      "evidence": [
+        { "file": "src/client.js", "line": 3, "quote": "process.env.GEO_API_KEY" },
+        { "file": ".env.example", "line": 0, "quote": "ABSENT: glob '{.env.example,.env.sample,.env.template}' returned 0 files" }
+      ]
+    },
+    {
+      "domain": "infra",
+      "title": "npm run lint cannot succeed: eslint 8 is configured by the manifest but no eslint config file exists",
+      "severity": "low",
+      "confidence": "inferred",
+      "standard": ["Scorecard:SAST"],
+      "detail": "package.json declares a lint script and pins eslint 8.57.0 as a devDependency, but the repo contains no .eslintrc, no eslint.config.*, and no eslintConfig key in package.json. ESLint 8 resolves config by walking up from the target files and exits with an error when it finds none, so the declared lint gate cannot pass on any input. Marked inferred rather than confirmed because node_modules/ is absent by design and installing is not permitted, so the command could not be executed and its output pasted.",
+      "impact": "The repo advertises a lint gate that does not exist. Anyone wiring CI later will add the lint step, watch it fail for a reason unrelated to code quality, and most likely delete the step rather than add the missing config.",
+      "evidence": [
+        { "file": "package.json", "line": 11, "quote": "\"lint\": \"eslint src/\"" },
+        { "file": "eslint.config.js", "line": 0, "quote": "ABSENT: glob '{eslint.config.*,.eslintrc*}' returned 0 files" }
+      ]
+    },
+    {
+      "domain": "infra",
+      "title": "Dependencies pinned years behind with no automated update tooling to surface advisories",
+      "severity": "low",
+      "confidence": "confirmed",
+      "standard": ["CWE-1104", "Scorecard:Dependency-Update-Tool"],
+      "detail": "express is pinned at exactly 4.17.1 and sqlite3 at exactly 5.0.2 - both multiple minor versions behind their lines, and the exact pins mean they will never move on their own. There is simultaneously no Dependabot, Renovate, or equivalent configuration, so nothing opens a PR when an advisory lands against either. No vulnerability is claimed in either package: npm audit requires a lockfile and node_modules and could not be run, so no advisory id was observed. The finding is the maintenance posture, not a known CVE.",
+      "impact": "An advisory published against these versions reaches this repo only when a human decides to look, and the exact pins mean even a fresh install will not pick up a patch release.",
+      "evidence": [
+        { "file": "package.json", "line": 14, "quote": "\"express\": \"4.17.1\"" },
+        { "file": "package.json", "line": 15, "quote": "\"sqlite3\": \"5.0.2\"" },
+        { "file": ".github/dependabot.yml", "line": 0, "quote": "ABSENT: glob '{.github/dependabot.yml,renovate.json,.renovaterc*}' returned 0 files" }
+      ]
+    },
+    {
+      "domain": "infra",
+      "title": "Listen port and sqlite database path are hardcoded with no environment override",
+      "severity": "low",
+      "confidence": "confirmed",
+      "standard": ["API8:2023"],
+      "detail": "src/server.js binds a literal port with no PORT fallback, and src/db.js opens the database at a relative path, which resolves against the process working directory rather than a configured data location. Together these are the only two deployment knobs the service has and neither is settable without editing source. The relative path in particular means the same checkout started from two different working directories silently opens two different databases and reports no error.",
+      "impact": "The service cannot be run twice on one host, cannot be placed behind a platform that assigns a port, and its data file location depends on how the process happened to be launched - a class of bug that presents as 'the profiles disappeared'.",
+      "evidence": [
+        { "file": "src/server.js", "line": 11, "quote": "app.listen(3000, () => console.log('listening on 3000'));" },
+        { "file": "src/db.js", "line": 3, "quote": "new sqlite3.Database('./profiles.db')" }
+      ],
+      "patch": "--- a/src/server.js\n+++ b/src/server.js\n@@\n-app.listen(3000, () => console.log('listening on 3000'));\n+const PORT = Number(process.env.PORT) || 3000;\n+app.listen(PORT, () => console.log(`listening on ${PORT}`));\n"
+    }
+  ],
+  "tests": [],
+  "assumptions": [
+    "npm audit could not be run: this repo has no lockfile and node_modules/ is absent by design, and npm audit requires a lockfile. No advisory ids were observed for express 4.17.1, sqlite3 5.0.2 or eslint 8.57.0, and none are claimed. Bootstrap to reproduce: `npm install --package-lock-only && npm audit --json --omit=dev`.",
+    "npm run lint could not be executed to confirm the eslint-config finding, because node_modules/ is absent and installing is forbidden. Bootstrap: `npm install && npm run lint`. The finding is recorded as inferred for that reason.",
+    "Branch protection and required-review settings were not assessed: no CODEOWNERS or ruleset config exists in tree, and these settings live in the forge rather than the repository, so they cannot be observed from source.",
+    "Scorecard checks whose premise is public open-source distribution - License, Security-Policy, Signed-Releases, Packaging, Fuzzing, CII-Best-Practices, Contributors - were deliberately not reported. package.json sets private true and README.md states this is a fixture, not a published package, so SLSA provenance and SBOM have no artifact to attach to either.",
+    "No containers, Dockerfile, compose file, or deploy manifests exist in this directory, so the container section of the doctrine had nothing to assess.",
+    "No .gitignore exists in this directory, but nothing untracked-and-sensitive is currently present, so it is recorded here rather than as a finding."
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "slice": "tests-correctness",
+  "findings": [
+    {
+      "domain": "tests",
+      "title": "npm test fails to start: `node --test test/` resolves the directory as a module under Node 24",
+      "severity": "high",
+      "confidence": "confirmed",
+      "detail": "The configured test script is `node --test test/`. On the installed Node (v24.18.0) that trailing-slash directory argument is treated as a module entry point rather than a test directory, so the runner throws MODULE_NOT_FOUND before executing any test and exits 1. The tests themselves are fine: bare `node --test` runs and reports 2 passed. So the suite is not merely red, it never runs.",
+      "impact": "Every developer or automation invoking npm test gets a hard failure with a MODULE_NOT_FOUND stack, and the two real assertions never execute. Any regression in isPostcode ships undetected because the only gate is inoperable.",
+      "evidence": [
+        { "file": "package.json", "line": 10, "quote": "\"test\": \"node --test test/\"" },
+        { "file": "test/validate.test.js", "line": 5, "quote": "test('isPostcode accepts five digits', () => {" }
+      ],
+      "repro": "$ npm test\n> demo-profile-service@0.3.1 test\n> node --test test/\n\nError: Cannot find module '...\\examples\\demo-repo\\test'\n  code: 'MODULE_NOT_FOUND'\n\nx test (63.5458ms)\ni tests 1\ni pass 0\ni fail 1\nEXIT=1\n\n$ node --test test/validate.test.js\nok isPostcode accepts five digits (0.8577ms)\nok isPostcode rejects letters (0.1795ms)\ni tests 2\ni pass 2\ni fail 0",
+      "patch": "--- a/package.json\n+++ b/package.json\n@@\n-    \"test\": \"node --test test/\",\n+    \"test\": \"node --test\",\n"
+    },
+    {
+      "domain": "tests",
+      "title": "isProfileId and normalizeProfile are exported and reachable from the HTTP handlers but no test references them",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "test/validate.test.js is the only test file and it imports exactly one symbol, isPostcode. isProfileId is the guard on the :id path parameter that reaches the string-interpolated SQL in findProfile, and normalizeProfile is the only place age is coerced from user input and email is trimmed and lowercased. Uncovered branches that matter: the {6,36} length bounds and the anchoring of the isProfileId pattern - the branch deciding whether an id containing a quote is rejected - and normalizeProfile's age branch, where Number() on a non-numeric string yields NaN and on true yields 1, both silently persisted.",
+      "impact": "The two validators guarding the request surface can be weakened or broken by an edit with a fully green suite. A regression that unanchors the isProfileId regex would remove the only input restriction in front of the interpolated query, and nothing in the repo would notice.",
+      "evidence": [
+        { "file": "test/validate.test.js", "line": 3, "quote": "import { isPostcode } from '../src/validate.js';" },
+        { "file": "src/validate.js", "line": 6, "quote": "return typeof value === 'string' && /^[a-z0-9-]{6,36}$/.test(value);" },
+        { "file": "src/validate.js", "line": 13, "quote": "if (out.age != null) out.age = Number(out.age);" }
+      ]
+    },
+    {
+      "domain": "tests",
+      "title": "listProfiles has no rejection handler; a DB error becomes an unhandled rejection and kills the server process",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "getProfile and postProfile both terminate their promise chains with a .catch that returns 500. listProfiles does not. allProfiles rejects whenever sqlite3's db.all yields an error - a missing table, a locked file, a corrupt db. Under Node's default --unhandled-rejections=throw (default since Node 15, and this is Node 24), that rejection is thrown at the top level and terminates the process rather than returning a 500.",
+      "impact": "A single ordinary database error on one read-only endpoint takes down the entire server for all callers, converting a per-request 500 into a full outage. No test exercises listProfiles, so the asymmetry with the other two handlers is invisible.",
+      "evidence": [
+        { "file": "src/routes.js", "line": 22, "quote": "allProfiles().then((rows) => res.json(rows));" },
+        { "file": "src/db.js", "line": 28, "quote": "if (err) reject(err);" }
+      ],
+      "patch": "--- a/src/routes.js\n+++ b/src/routes.js\n@@\n-export function listProfiles(req, res) {\n-  allProfiles().then((rows) => res.json(rows));\n-}\n+export function listProfiles(req, res) {\n+  allProfiles()\n+    .then((rows) => res.json(rows))\n+    .catch((err) => res.status(500).json({ error: err.message }));\n+}\n"
+    },
+    {
+      "domain": "tests",
+      "title": "No CI workflow exists, so the test suite gates nothing",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["Scorecard:CI-Tests"],
+      "detail": "There is no .github directory in the repo and no other CI configuration file. The test and lint scripts are therefore only ever run by hand. This is what allowed the broken `node --test test/` invocation to sit in package.json: nothing ever executes it.",
+      "impact": "Nothing prevents a change that breaks isPostcode, or that further breaks the test script itself, from being merged. The team plausibly believes a green suite protects the profile endpoints; in practice no automated run occurs at any point.",
+      "evidence": [
+        { "file": ".github/workflows", "line": 0, "quote": "ABSENT: glob '.github/workflows/*.{yml,yaml}' returned 0 files" }
+      ]
+    },
+    {
+      "domain": "tests",
+      "title": "enrich swallows every lookup failure in an empty catch, so POST /api/profile returns 200 with a silently missing region",
+      "severity": "low",
+      "confidence": "confirmed",
+      "detail": "The catch block in enrich has an empty body. Any failure inside lookupRegion - fetch network error, non-JSON response body, a 401 from an expired key - is discarded without a log or a rethrow, and enrich returns the profile with region simply absent. postProfile then responds 200 with that object. There is also no res.ok check, so a 4xx/5xx JSON error envelope sets region to undefined down the same silent path.",
+      "impact": "A fully broken or unauthenticated geo integration is indistinguishable from a healthy one at both the API response and the logs; profiles accumulate with no region and nobody is alerted.",
+      "evidence": [
+        { "file": "src/client.js", "line": 16, "quote": "} catch (err) {" },
+        { "file": "src/client.js", "line": 9, "quote": "const body = await res.json();" }
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "name": "unit (node:test)",
+      "command": "npm test",
+      "status": "fail",
+      "summary": "Runner aborted before executing any test: MODULE_NOT_FOUND on the 'test' directory argument. 0 passed, 1 failed, exit 1. Corrected invocation (`node --test`) runs 2 tests, 2 passed.",
+      "output": "> demo-profile-service@0.3.1 test\n> node --test test/\n\nError: Cannot find module '...\\examples\\demo-repo\\test'\n  code: 'MODULE_NOT_FOUND'\n\nx test (63.5458ms)\ni tests 1\ni suites 0\ni pass 0\ni fail 1\ni duration_ms 72.4078"
+    },
+    {
+      "name": "lint (eslint)",
+      "command": "npm run lint",
+      "status": "not-run",
+      "bootstrap": "npm install",
+      "summary": "eslint is not installed (node_modules/ absent) and `npx --no-install eslint --version` refused to fetch it. No eslint config file exists in the repo either, so the configured command would additionally need a flat config to produce results.",
+      "output": "$ npx --no-install eslint --version\nnpm error npx canceled due to missing packages and no YES option: [\"eslint@10.7.0\"]\n\n$ ls node_modules\nls: cannot access 'node_modules': No such file or directory"
+    },
+    {
+      "name": "typecheck",
+      "command": "n/a",
+      "status": "not-run",
+      "bootstrap": "n/a - plain JavaScript project, no tsconfig.json and no typechecker configured",
+      "summary": "No typechecker is configured for this project; nothing to run.",
+      "output": ""
+    }
+  ],
+  "assumptions": [
+    "node_modules/ is absent and per doctrine I did not install it. The unit suite still executed because test/validate.test.js imports only src/validate.js, which has no third-party imports; the other src files import express and sqlite3 and were never loaded by any test run.",
+    "The unhandled-rejection outcome for listProfiles is traced from Node's default behavior on Node 24, not executed - the server cannot be started without express and sqlite3 installed.",
+    "No coverage instrumentation is configured and none was run, so no coverage numbers or thresholds are reported.",
+    "The corrected `node --test` invocation was run only to establish that the two existing assertions pass and that the failure is in the script, not the tests. No files were modified."
+  ]
+}

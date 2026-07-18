@@ -1,0 +1,106 @@
+{
+  "slice": "performance-observability",
+  "findings": [
+    {
+      "domain": "performance",
+      "title": "GET /api/profiles returns the entire profiles table with no LIMIT or pagination",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["CWE-770", "API4:2023"],
+      "detail": "allProfiles() issues an unfiltered SELECT with no LIMIT, OFFSET, or cursor, and listProfiles serializes every row straight into the JSON response. There is no caller-supplied bound and no server-side cap, so response size and heap usage grow linearly with the table, which grows on every unauthenticated POST.",
+      "impact": "Once the table is large, a single request buffers every row in memory and serializes it, pegging the event loop during JSON.stringify. The table size is attacker-controlled via the open POST route, so a caller can grow the cost of this endpoint without limit.",
+      "evidence": [
+        { "file": "src/db.js", "line": 27, "quote": "db.all('SELECT * FROM profiles', (err, rows)" },
+        { "file": "src/routes.js", "line": 22, "quote": "allProfiles().then((rows) => res.json(rows));" }
+      ],
+      "patch": "--- a/src/db.js\n+++ b/src/db.js\n@@\n-export function allProfiles() {\n+export function allProfiles(limit = 100, offset = 0) {\n   return new Promise((resolve, reject) => {\n-    db.all('SELECT * FROM profiles', (err, rows) => {\n+    db.all('SELECT * FROM profiles LIMIT ? OFFSET ?', [limit, offset], (err, rows) => {\n       if (err) reject(err);\n       else resolve(rows);\n     });\n   });\n }\n"
+    },
+    {
+      "domain": "maintainability",
+      "title": "listProfiles has no rejection handler, so a DB error hangs the request instead of answering it",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["ASVS-V16"],
+      "detail": "getProfile and postProfile both terminate their promise chains with a .catch that returns 500. listProfiles does not. If db.all rejects - locked database, missing table, corrupt file - nothing calls res, the client receives no status at all, and Node emits an unhandled rejection which on Node 15+ terminates the process by default.",
+      "impact": "A transient error on this one route turns into a hung connection plus a process exit rather than a 500. The failure is invisible in logs, so the error-rate golden signal reads zero while the endpoint is down.",
+      "evidence": [
+        { "file": "src/routes.js", "line": 22, "quote": "allProfiles().then((rows) => res.json(rows));" },
+        { "file": "src/routes.js", "line": 18, "quote": ".catch((err) => res.status(500).json({ error: err.message }));" }
+      ]
+    },
+    {
+      "domain": "maintainability",
+      "title": "enrich() swallows every geo-lookup failure in an empty catch block",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["ASVS-V16"],
+      "detail": "The catch in enrich has an empty body - no log, no counter, no rethrow. Any failure of lookupRegion (DNS failure, non-2xx response, invalid JSON, network timeout) leaves profile.region undefined and the profile is returned to the client as a normal 200.",
+      "impact": "A total outage of the geo dependency is byte-identical, from the outside and in the logs, to a profile whose postcode legitimately has no region. Nobody is paged, no error rate moves, and the only symptom is profiles silently missing a field - typically discovered weeks later from downstream data.",
+      "evidence": [
+        { "file": "src/client.js", "line": 16, "quote": "} catch (err) {" },
+        { "file": "src/client.js", "line": 15, "quote": "profile.region = await lookupRegion(profile.postcode);" }
+      ],
+      "patch": "--- a/src/client.js\n+++ b/src/client.js\n@@\n export async function enrich(profile) {\n   try {\n     profile.region = await lookupRegion(profile.postcode);\n-  } catch (err) {\n-  }\n+  } catch (err) {\n+    console.error(JSON.stringify({ level: 'error', event: 'geo_lookup_failed', message: err.message }));\n+  }\n   return profile;\n }\n"
+    },
+    {
+      "domain": "performance",
+      "title": "Outbound geo fetch has no timeout, so a slow dependency holds request handlers open indefinitely",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["CWE-770"],
+      "detail": "lookupRegion awaits a bare fetch with no AbortSignal, no timeout option, and no concurrency cap. Node's fetch has no default request timeout, so a provider that accepts connections and never responds parks the await forever. enrich sits on the POST write path, so every write request inherits that unbounded wait.",
+      "impact": "A hung (not failed) third-party becomes an outage of the write path: connections and promise state accumulate with no upper bound while the empty catch guarantees none of it is logged. Because there is no timeout the requests never even reach the 500 handler; they just never finish.",
+      "evidence": [
+        { "file": "src/client.js", "line": 8, "quote": "const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);" },
+        { "file": "src/routes.js", "line": 16, "quote": ".then((saved) => enrich(saved))" }
+      ],
+      "patch": "--- a/src/client.js\n+++ b/src/client.js\n@@\n-  const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);\n+  const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`, {\n+    signal: AbortSignal.timeout(3000)\n+  });\n"
+    },
+    {
+      "domain": "maintainability",
+      "title": "No latency, traffic, or error signal is emitted: logRequest is an unstructured string and logError is never called",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["ASVS-V16"],
+      "detail": "logRequest emits a single concatenated console.log line with method, url and body, and is called before the handler does any work, so no request duration is ever recorded. logError is exported from src/log.js but has zero call sites in the repo, so every error path reports to the client and to nothing else. The four golden signals resolve as: latency unmeasurable, errors uncounted, traffic only greppable out of plain text, saturation absent.",
+      "impact": "An operator of this service cannot answer 'is it slow?' or 'what is the error rate?' at all. Diagnosing a report of slowness requires reading raw stdout by hand and correlating timestamps, and a rising 500 rate produces no signal anywhere until a user complains.",
+      "evidence": [
+        { "file": "src/log.js", "line": 2, "quote": "console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} body=${JSON.stringify(req.body)}`);" },
+        { "file": "src/log.js", "line": 5, "quote": "export function logError(err) {" }
+      ]
+    },
+    {
+      "domain": "maintainability",
+      "title": "No health endpoint and no SIGTERM handler on a service that listens on a port",
+      "severity": "low",
+      "confidence": "confirmed",
+      "detail": "server.js registers three business routes and calls app.listen directly. There is no /health or /ready route for a load balancer or orchestrator to probe, and no SIGTERM handler, so the only shutdown path is an abrupt process kill. In-flight requests - including the POST, which performs a DB insert and then an untimed outbound fetch - are severed mid-flight on every deploy.",
+      "impact": "An orchestrator has no way to distinguish 'process started' from 'ready to serve', so traffic is routed to instances before the database is reachable. On rollout, writes that have inserted a row but not yet enriched are cut, leaving persisted profiles with no region and no record that enrichment was interrupted.",
+      "evidence": [
+        { "file": "src/server.js", "line": 11, "quote": "app.listen(3000, () => console.log('listening on 3000'));" }
+      ],
+      "patch": "--- a/src/server.js\n+++ b/src/server.js\n@@\n-app.listen(3000, () => console.log('listening on 3000'));\n+app.get('/health', (req, res) => res.json({ status: 'ok' }));\n+\n+const server = app.listen(3000, () => console.log('listening on 3000'));\n+\n+process.on('SIGTERM', () => {\n+  server.close(() => process.exit(0));\n+});\n"
+    },
+    {
+      "domain": "maintainability",
+      "title": "isProfileId and normalizeProfile are exported validation helpers with no call sites",
+      "severity": "low",
+      "confidence": "confirmed",
+      "detail": "src/validate.js exports isProfileId and normalizeProfile. A grep across the whole directory returns only their definition lines - neither is imported anywhere, and routes.js imports nothing from validate.js. isProfileId matches exactly the shape of req.params.id consumed by getProfile, and normalizeProfile matches the raw req.body assigned in postProfile; the safety net was written for these two call sites and never wired to them.",
+      "impact": "The next reader sees a validation module and reasonably assumes inputs are validated. In fact req.params.id flows unchecked into a string-interpolated SQL query and req.body flows unchecked into a column-list-from-keys INSERT. The presence of the unused helpers actively misleads about the state of input handling.",
+      "evidence": [
+        { "file": "src/validate.js", "line": 5, "quote": "export function isProfileId(value) {" },
+        { "file": "src/routes.js", "line": 1, "quote": "import { findProfile, saveProfile, allProfiles } from './db.js';" }
+      ],
+      "repro": "$ rg -n 'isProfileId|normalizeProfile' examples/demo-repo\nexamples/demo-repo/src/validate.js:5:export function isProfileId(value) {\nexamples/demo-repo/src/validate.js:9:export function normalizeProfile(profile) {"
+    }
+  ],
+  "tests": [],
+  "assumptions": [
+    "eslint is declared in devDependencies but node_modules/ is absent and no eslint config file exists, so lint could not be executed. Lint output was not consulted for any finding here; infra-supplychain owns the missing config.",
+    "The test suite was not run - tests-correctness owns it per doctrine.",
+    "The SQL injection in db.js and the credential fallback in client.js were observed while tracing the performance paths but are left to security-appsec; they appear above only as impact context for the unwired validators.",
+    "Table growth rate for the unbounded query is inferred from the POST route being unauthenticated; no load test was performed, so the specific row count at which the endpoint degrades is unknown.",
+    "Whether the deployment target is an orchestrator or load balancer could not be confirmed - no Dockerfile, compose file, or deployment manifest exists. The health/SIGTERM finding assumes the service is deployed behind one, which the README framing and the bare app.listen suggest but do not prove."
+  ]
+}

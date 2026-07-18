@@ -1,0 +1,1603 @@
+{
+  "summary": "20 issues from 32 accepted findings; 0 rejected by the grounding gate. \nAssumptions (unverified, discount accordingly):\n- [infra-supplychain] npm audit could not be run: this repo has no lockfile and node_modules/ is absent by design, and npm audit requires a lockfile. No advisory ids were observed for express 4.17.1, sqlite3 5.0.2 or eslint 8.57.0, and none are claimed. Bootstrap to reproduce: `npm install --package-lock-only && npm audit --json --omit=dev`.\n- [infra-supplychain] npm run lint could not be executed to confirm the eslint-config finding, because node_modules/ is absent and installing is forbidden. Bootstrap: `npm install && npm run lint`. The finding is recorded as inferred for that reason.\n- [infra-supplychain] Branch protection and required-review settings were not assessed: no CODEOWNERS or ruleset config exists in tree, and these settings live in the forge rather than the repository, so they cannot be observed from source.\n- [infra-supplychain] Scorecard checks whose premise is public open-source distribution - License, Security-Policy, Signed-Releases, Packaging, Fuzzing, CII-Best-Practices, Contributors - were deliberately not reported. package.json sets private true and README.md states this is a fixture, not a published package, so SLSA provenance and SBOM have no artifact to attach to either.\n- [infra-supplychain] No containers, Dockerfile, compose file, or deploy manifests exist in this directory, so the container section of the doctrine had nothing to assess.\n- [infra-supplychain] No .gitignore exists in this directory, but nothing untracked-and-sensitive is currently present, so it is recorded here rather than as a finding.\n- [performance-observability] eslint is declared in devDependencies but node_modules/ is absent and no eslint config file exists, so lint could not be executed. Lint output was not consulted for any finding here; infra-supplychain owns the missing config.\n- [performance-observability] The test suite was not run - tests-correctness owns it per doctrine.\n- [performance-observability] The SQL injection in db.js and the credential fallback in client.js were observed while tracing the performance paths but are left to security-appsec; they appear above only as impact context for the unwired validators.\n- [performance-observability] Table growth rate for the unbounded query is inferred from the POST route being unauthenticated; no load test was performed, so the specific row count at which the endpoint degrades is unknown.\n- [performance-observability] Whether the deployment target is an orchestrator or load balancer could not be confirmed - no Dockerfile, compose file, or deployment manifest exists. The health/SIGTERM finding assumes the service is deployed behind one, which the README framing and the bare app.listen suggest but do not prove.\n- [privacy-data] The personal-data inventory is inferred from code rather than from a schema: there is no CREATE TABLE anywhere in the repo, and saveProfile builds its column list dynamically, so the actual table shape is whatever a client last posted. Email, age and postcode are the fields the code demonstrably handles; there may be more.\n- [privacy-data] Did not execute the service or observe a real log line or outbound request - node_modules/ is absent and no install was run. All findings are traced statically from source.\n- [privacy-data] No retention configuration, log shipping target, or backup mechanism is present in the repo, so where the console.log stream ends up and how long it is kept could not be determined; the impact statement assumes typical stdout collection.\n- [privacy-data] The geo API host is a placeholder domain; whether a real third party would receive this data in a deployed version of this fixture is unknowable from source.\n- [security-appsec] node_modules/ is not installed and there is no lockfile, so no runtime exploitation was executed. Every injection finding was traced by reading source, not by sending a request.\n- [security-appsec] Could not determine whether the geo key literal is live; the host is an RFC 2606 example domain, which suggests fixture data. The fail-open fallback pattern is the defect regardless.\n- [security-appsec] express.json() applies express's default 100kb body cap, so no unbounded-body finding is reported.\n- [security-appsec] log.js logs the full request body. That is privacy-data's slice, not reported here.\n- [security-appsec] Authorization was not assessed: none of the three routes has auth middleware, but that is security-authz-identity's slice.\n- [security-authz-identity] node_modules/ is not installed, so nothing was executed; all three findings were established by reading src/server.js and src/routes.js end to end rather than by sending a request.\n- [security-authz-identity] The exact column set of the profiles table could not be confirmed - no schema or migration file exists - so the mass-assignment finding names id as the concrete settable column and does not assert that a role or admin column exists.\n- [security-authz-identity] Out of slice, handed to security-appsec: the two unparameterized queries in src/db.js, the committed credential fallback and plaintext base URL in src/client.js. The empty catch in client.js belongs to performance-observability; the request-body logging in src/log.js to privacy-data.\n- [security-authz-identity] No cookies, sessions, or tokens are set or read anywhere in the repo, so no CSRF, session-management (ASVS V7), or token-verification (ASVS V9) finding is reported - those controls are absent because the auth model itself is absent, which findings 1 and 2 already cover.\n- [tests-correctness] node_modules/ is absent and per doctrine I did not install it. The unit suite still executed because test/validate.test.js imports only src/validate.js, which has no third-party imports; the other src files import express and sqlite3 and were never loaded by any test run.\n- [tests-correctness] The unhandled-rejection outcome for listProfiles is traced from Node's default behavior on Node 24, not executed - the server cannot be started without express and sqlite3 installed.\n- [tests-correctness] No coverage instrumentation is configured and none was run, so no coverage numbers or thresholds are reported.\n- [tests-correctness] The corrected `node --test` invocation was run only to establish that the two existing assertions pass and that the failure is in the script, not the tests. No files were modified.",
+  "issues": [
+    {
+      "id": "I1",
+      "title": "GET /api/profiles returns every stored profile record, unauthenticated",
+      "severity": "high",
+      "confidence": "confirmed",
+      "domains": [
+        "privacy",
+        "tests",
+        "maintainability"
+      ],
+      "standard": [
+        "API3:2023",
+        "ASVS-V14",
+        "ASVS-V16",
+        "CWE-200"
+      ],
+      "detail": "listProfiles calls allProfiles(), which runs an unfiltered SELECT, and serialises the full result set straight to the response with no field allowlist and no caller scoping. The route is mounted with no auth middleware. The profile records carry email, age and postcode, so a single unauthenticated request returns the entire user base's contact and location data. This overlaps security-authz-identity's function-level check; the finding here is the bulk data exposure itself.",
+      "impact": "Anyone who can reach the service can export every user's email, age and postcode in one request. Nothing in the response path limits which columns leave - a column added to the profiles table later is exposed automatically.",
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 22,
+          "quote": "allProfiles().then((rows) => res.json(rows));"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 18,
+          "quote": ".catch((err) => res.status(500).json({ error: err.message }));"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 22,
+          "quote": "allProfiles().then((rows) => res.json(rows));"
+        },
+        {
+          "file": "src/db.js",
+          "line": 27,
+          "quote": "db.all('SELECT * FROM profiles', (err, rows) => {"
+        },
+        {
+          "file": "src/server.js",
+          "line": 9,
+          "quote": "app.get('/api/profiles', listProfiles);"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 22,
+          "quote": "allProfiles().then((rows) => res.json(rows));"
+        },
+        {
+          "file": "src/db.js",
+          "line": 28,
+          "quote": "if (err) reject(err);"
+        }
+      ],
+      "corroboration": 3,
+      "patchIds": [
+        "P1"
+      ]
+    },
+    {
+      "id": "I2",
+      "title": "Third-party API key falls back to a hardcoded literal in tracked source",
+      "severity": "high",
+      "confidence": "confirmed",
+      "domains": [
+        "security",
+        "infra"
+      ],
+      "standard": [
+        "API8:2023",
+        "ASVS-V13",
+        "CWE-798"
+      ],
+      "detail": "GEO_API_KEY has a fail-open fallback to the committed literal. When the environment variable is unset the service does not fail - it silently authenticates with the key baked into the repository. The literal is present in git history from the initial import, so deleting the line does not revoke it.",
+      "impact": "Anyone with read access to the repo, or to any clone or fork of it, holds whatever the key authorizes. Because it is in history, remediation requires rotating the credential at the provider. The fallback also hides misconfiguration: a deploy missing the env var looks healthy.",
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 3,
+          "quote": "process.env.GEO_API_KEY"
+        },
+        {
+          "file": ".env.example",
+          "line": 0,
+          "quote": "ABSENT: glob '{.env.example,.env.sample,.env.template}' returned 0 files"
+        },
+        {
+          "file": "src/client.js",
+          "line": 3,
+          "quote": "const GEO_KEY = process.env.GEO_API_KEY || 'sk-demo-2f9a41c07be34d18';"
+        }
+      ],
+      "repro": "$ git log -S 'sk-demo-2f9a41c07be34d18' --oneline -- examples/demo-repo\n4204f28 Scaffold repo, doctrine, demo fixture, and grounding gate",
+      "corroboration": 2,
+      "patchIds": [
+        "P2"
+      ]
+    },
+    {
+      "id": "I3",
+      "title": "SQL injection and mass assignment: request body keys become column names in an INSERT",
+      "severity": "high",
+      "confidence": "confirmed",
+      "domains": [
+        "security"
+      ],
+      "standard": [
+        "API3:2023",
+        "ASVS-V1.2",
+        "CWE-20",
+        "CWE-639",
+        "CWE-89"
+      ],
+      "detail": "postProfile assigns req.body directly to profile (routes.js:14) and hands it to saveProfile, which derives the column list from Object.keys and the value list from Object.values, quoting values by string concatenation (db.js:16-18). Identifier positions cannot be fixed by parameter binding at all, so the fix is an explicit allowlist of columns, not just placeholders.",
+      "impact": "An unauthenticated caller controls the text of an executed INSERT and the set of columns written. Beyond injection, this is mass assignment: any column the schema has can be set by adding a key to the JSON body.",
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 14,
+          "quote": "const profile = req.body;"
+        },
+        {
+          "file": "src/db.js",
+          "line": 16,
+          "quote": "const cols = Object.keys(profile).join(', ');"
+        },
+        {
+          "file": "src/db.js",
+          "line": 17,
+          "quote": "const vals = Object.values(profile).map((v) => `'${v}'`).join(', ');"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 14,
+          "quote": "const profile = req.body;"
+        },
+        {
+          "file": "src/db.js",
+          "line": 16,
+          "quote": "const cols = Object.keys(profile).join(', ');"
+        },
+        {
+          "file": "src/validate.js",
+          "line": 9,
+          "quote": "export function normalizeProfile(profile) {"
+        }
+      ],
+      "corroboration": 2,
+      "patchIds": [
+        "P3"
+      ]
+    },
+    {
+      "id": "I4",
+      "title": "npm test fails to start: `node --test test/` resolves the directory as a module under Node 24",
+      "severity": "high",
+      "confidence": "confirmed",
+      "domains": [
+        "tests",
+        "infra"
+      ],
+      "standard": [
+        "Scorecard:SAST"
+      ],
+      "detail": "The configured test script is `node --test test/`. On the installed Node (v24.18.0) that trailing-slash directory argument is treated as a module entry point rather than a test directory, so the runner throws MODULE_NOT_FOUND before executing any test and exits 1. The tests themselves are fine: bare `node --test` runs and reports 2 passed. So the suite is not merely red, it never runs.",
+      "impact": "Every developer or automation invoking npm test gets a hard failure with a MODULE_NOT_FOUND stack, and the two real assertions never execute. Any regression in isPostcode ships undetected because the only gate is inoperable.",
+      "evidence": [
+        {
+          "file": "package.json",
+          "line": 11,
+          "quote": "\"lint\": \"eslint src/\""
+        },
+        {
+          "file": "eslint.config.js",
+          "line": 0,
+          "quote": "ABSENT: glob '{eslint.config.*,.eslintrc*}' returned 0 files"
+        },
+        {
+          "file": "package.json",
+          "line": 10,
+          "quote": "\"test\": \"node --test test/\""
+        },
+        {
+          "file": "test/validate.test.js",
+          "line": 5,
+          "quote": "test('isPostcode accepts five digits', () => {"
+        }
+      ],
+      "repro": "$ npm test\n> demo-profile-service@0.3.1 test\n> node --test test/\n\nError: Cannot find module '...\\examples\\demo-repo\\test'\n  code: 'MODULE_NOT_FOUND'\n\nx test (63.5458ms)\ni tests 1\ni pass 0\ni fail 1\nEXIT=1\n\n$ node --test test/validate.test.js\nok isPostcode accepts five digits (0.8577ms)\nok isPostcode rejects letters (0.1795ms)\ni tests 2\ni pass 2\ni fail 0",
+      "corroboration": 2,
+      "patchIds": [
+        "P4"
+      ]
+    },
+    {
+      "id": "I5",
+      "title": "SQL injection: profile id from the URL is interpolated into a SELECT",
+      "severity": "high",
+      "confidence": "confirmed",
+      "domains": [
+        "security"
+      ],
+      "standard": [
+        "API8:2023",
+        "ASVS-V1.2",
+        "CWE-89"
+      ],
+      "detail": "GET /api/profile/:id passes req.params.id straight to findProfile (routes.js:7), which builds the query by template literal with the value inside single quotes (db.js:7). Nothing between the route and the query escapes or validates it - src/validate.js exports isProfileId but is never imported anywhere in src/.",
+      "impact": "An unauthenticated caller reads any row in the profiles table, and with a UNION-style payload can enumerate the whole SQLite schema and every stored profile.",
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 7,
+          "quote": "findProfile(req.params.id)"
+        },
+        {
+          "file": "src/db.js",
+          "line": 7,
+          "quote": "db.get(`SELECT * FROM profiles WHERE id = '${id}'`, (err, row) => {"
+        }
+      ],
+      "corroboration": 1,
+      "patchIds": [
+        "P5"
+      ]
+    },
+    {
+      "id": "I6",
+      "title": "Every read route is reachable unauthenticated; GET /api/profiles dumps the whole profile table",
+      "severity": "high",
+      "confidence": "confirmed",
+      "domains": [
+        "security"
+      ],
+      "standard": [
+        "API1:2023",
+        "ASVS-V8",
+        "CWE-306"
+      ],
+      "detail": "src/server.js registers three routes and applies exactly one piece of middleware, express.json(). There is no auth middleware, no session lookup, and no per-route guard. getProfile takes req.params.id straight to findProfile() and returns the row; identity is never read from the request and never compared against any owner field, because no identity exists anywhere in the codebase. listProfiles returns allProfiles() with no filter at all.",
+      "impact": "Any anonymous caller who can reach the port can read any individual profile by enumerating its id, or skip enumeration entirely and retrieve every stored profile with a single unauthenticated request.",
+      "evidence": [
+        {
+          "file": "src/server.js",
+          "line": 5,
+          "quote": "app.use(express.json());"
+        },
+        {
+          "file": "src/server.js",
+          "line": 9,
+          "quote": "app.get('/api/profiles', listProfiles);"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 22,
+          "quote": "allProfiles().then((rows) => res.json(rows));"
+        }
+      ],
+      "corroboration": 1,
+      "patchIds": []
+    },
+    {
+      "id": "I7",
+      "title": "POST /api/profile writes to the profile store with no authentication",
+      "severity": "high",
+      "confidence": "confirmed",
+      "domains": [
+        "security"
+      ],
+      "standard": [
+        "API5:2023",
+        "CWE-306",
+        "CWE-862"
+      ],
+      "detail": "src/server.js registers postProfile as the sole handler for POST /api/profile. No guard precedes it and none is installed globally - the only app.use() in the file is express.json(). postProfile reads req.body into a local and hands it directly to saveProfile(), which performs an INSERT. Nothing between the socket and the write establishes or checks a caller identity.",
+      "impact": "An anonymous caller can insert arbitrary rows into the profiles table with no rate limit or ownership constraint, polluting the data other users read back, and driving unbounded growth of the database file.",
+      "evidence": [
+        {
+          "file": "src/server.js",
+          "line": 8,
+          "quote": "app.post('/api/profile', postProfile);"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 15,
+          "quote": "saveProfile(profile)"
+        }
+      ],
+      "corroboration": 1,
+      "patchIds": []
+    },
+    {
+      "id": "I8",
+      "title": "User postcode is sent to a third-party geo API over cleartext HTTP",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "security",
+        "privacy"
+      ],
+      "standard": [
+        "ASVS-V12",
+        "ASVS-V14",
+        "CWE-200",
+        "CWE-319"
+      ],
+      "detail": "enrich() passes profile.postcode into lookupRegion, which builds a URL against a plaintext http:// base and places the postcode in the query string. postProfile calls enrich(saved) for every profile written, so each write ships a user's postcode to an external party in the clear. The postcode also lands in that third party's access logs by virtue of being a query parameter rather than a request body.",
+      "impact": "Any network observer between the service and the provider sees each user's postcode, correlated with the request timing of their signup. The egress happens unconditionally on every write with no opt-out, and the postcode is retained in the third party's URL logs outside this system's control.",
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 5,
+          "quote": "const BASE = 'http://geo.example.com/v1';"
+        },
+        {
+          "file": "src/client.js",
+          "line": 8,
+          "quote": "await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 16,
+          "quote": ".then((saved) => enrich(saved))"
+        },
+        {
+          "file": "src/client.js",
+          "line": 5,
+          "quote": "const BASE = 'http://geo.example.com/v1';"
+        },
+        {
+          "file": "src/client.js",
+          "line": 8,
+          "quote": "const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);"
+        }
+      ],
+      "corroboration": 2,
+      "patchIds": []
+    },
+    {
+      "id": "I9",
+      "title": "Outbound geo fetch has no timeout, so a slow dependency holds request handlers open indefinitely",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "security",
+        "performance"
+      ],
+      "standard": [
+        "ASVS-V12",
+        "CWE-20",
+        "CWE-770"
+      ],
+      "detail": "lookupRegion awaits a bare fetch with no AbortSignal, no timeout option, and no concurrency cap. Node's fetch has no default request timeout, so a provider that accepts connections and never responds parks the await forever. enrich sits on the POST write path, so every write request inherits that unbounded wait.",
+      "impact": "A hung (not failed) third-party becomes an outage of the write path: connections and promise state accumulate with no upper bound while the empty catch guarantees none of it is logged. Because there is no timeout the requests never even reach the 500 handler; they just never finish.",
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 8,
+          "quote": "const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 16,
+          "quote": ".then((saved) => enrich(saved))"
+        },
+        {
+          "file": "src/client.js",
+          "line": 8,
+          "quote": "const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);"
+        }
+      ],
+      "corroboration": 2,
+      "patchIds": [
+        "P6"
+      ]
+    },
+    {
+      "id": "I10",
+      "title": "Validation module exists but no handler imports it",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "security",
+        "maintainability"
+      ],
+      "standard": [
+        "ASVS-V2",
+        "CWE-20"
+      ],
+      "detail": "src/validate.js exports isProfileId (a check that would have blocked the id injection), isPostcode, and normalizeProfile. No route, no db function, and no client function imports any of them. getProfile passes req.params.id unchecked, postProfile passes req.body unchecked, and lookupRegion passes profile.postcode unchecked.",
+      "impact": "The team wrote exactly the constraints that would have contained the two injection findings above and never wired them in, so the code reads as validated to a reviewer skimming the file list while every handler is unguarded. The fix is small and already written.",
+      "evidence": [
+        {
+          "file": "src/validate.js",
+          "line": 5,
+          "quote": "export function isProfileId(value) {"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 1,
+          "quote": "import { findProfile, saveProfile, allProfiles } from './db.js';"
+        },
+        {
+          "file": "src/validate.js",
+          "line": 5,
+          "quote": "export function isProfileId(value) {"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 7,
+          "quote": "findProfile(req.params.id)"
+        },
+        {
+          "file": "src/client.js",
+          "line": 15,
+          "quote": "profile.region = await lookupRegion(profile.postcode);"
+        }
+      ],
+      "repro": "$ rg -n 'isProfileId|normalizeProfile' examples/demo-repo\nexamples/demo-repo/src/validate.js:5:export function isProfileId(value) {\nexamples/demo-repo/src/validate.js:9:export function normalizeProfile(profile) {",
+      "corroboration": 2,
+      "patchIds": []
+    },
+    {
+      "id": "I11",
+      "title": "No latency, traffic, or error signal is emitted: logRequest is an unstructured string and logError is never called",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "privacy",
+        "maintainability"
+      ],
+      "standard": [
+        "ASVS-V16",
+        "CWE-532"
+      ],
+      "detail": "logRequest emits a single concatenated console.log line with method, url and body, and is called before the handler does any work, so no request duration is ever recorded. logError is exported from src/log.js but has zero call sites in the repo, so every error path reports to the client and to nothing else. The four golden signals resolve as: latency unmeasurable, errors uncounted, traffic only greppable out of plain text, saturation absent.",
+      "impact": "An operator of this service cannot answer 'is it slow?' or 'what is the error rate?' at all. Diagnosing a report of slowness requires reading raw stdout by hand and correlating timestamps, and a rising 500 rate produces no signal anywhere until a user complains.",
+      "evidence": [
+        {
+          "file": "src/log.js",
+          "line": 2,
+          "quote": "console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} body=${JSON.stringify(req.body)}`);"
+        },
+        {
+          "file": "src/log.js",
+          "line": 5,
+          "quote": "export function logError(err) {"
+        },
+        {
+          "file": "src/log.js",
+          "line": 2,
+          "quote": "body=${JSON.stringify(req.body)}"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 13,
+          "quote": "logRequest(req);"
+        }
+      ],
+      "corroboration": 2,
+      "patchIds": [
+        "P7"
+      ]
+    },
+    {
+      "id": "I12",
+      "title": "No CI configuration at all, so the existing test suite gates nothing",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "tests",
+        "infra"
+      ],
+      "standard": [
+        "Scorecard:CI-Tests",
+        "Scorecard:SAST"
+      ],
+      "detail": "package.json declares a runnable suite and a lint script, but the repo contains no workflow directory of any kind: no .github/workflows, no .gitlab-ci.yml, no Jenkinsfile, no circle or travis config. Nothing executes the tests or the lint on push or on a pull request, and there is no SAST step either. The suite is real code that runs only when someone remembers to run it locally.",
+      "impact": "Any change to the validators, routes, or data layer can be merged with the suite red or the lint gate failing, and nobody finds out until runtime. The one automated quality signal this repo possesses is never consulted.",
+      "evidence": [
+        {
+          "file": ".github/workflows",
+          "line": 0,
+          "quote": "ABSENT: glob '.github/workflows/*.{yml,yaml}' returned 0 files"
+        },
+        {
+          "file": "package.json",
+          "line": 10,
+          "quote": "\"test\": \"node --test test/\""
+        },
+        {
+          "file": ".github/workflows",
+          "line": 0,
+          "quote": "ABSENT: glob '.github/workflows/*.{yml,yaml}' returned 0 files"
+        }
+      ],
+      "corroboration": 2,
+      "patchIds": []
+    },
+    {
+      "id": "I13",
+      "title": "enrich() swallows every geo-lookup failure in an empty catch block",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "tests",
+        "maintainability"
+      ],
+      "standard": [
+        "ASVS-V16"
+      ],
+      "detail": "The catch in enrich has an empty body - no log, no counter, no rethrow. Any failure of lookupRegion (DNS failure, non-2xx response, invalid JSON, network timeout) leaves profile.region undefined and the profile is returned to the client as a normal 200.",
+      "impact": "A total outage of the geo dependency is byte-identical, from the outside and in the logs, to a profile whose postcode legitimately has no region. Nobody is paged, no error rate moves, and the only symptom is profiles silently missing a field - typically discovered weeks later from downstream data.",
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 16,
+          "quote": "} catch (err) {"
+        },
+        {
+          "file": "src/client.js",
+          "line": 15,
+          "quote": "profile.region = await lookupRegion(profile.postcode);"
+        },
+        {
+          "file": "src/client.js",
+          "line": 16,
+          "quote": "} catch (err) {"
+        },
+        {
+          "file": "src/client.js",
+          "line": 9,
+          "quote": "const body = await res.json();"
+        }
+      ],
+      "corroboration": 2,
+      "patchIds": [
+        "P8"
+      ]
+    },
+    {
+      "id": "I14",
+      "title": "Driver error text returned verbatim to the caller in 500 responses",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "security"
+      ],
+      "standard": [
+        "API8:2023",
+        "CWE-209"
+      ],
+      "detail": "Both getProfile and postProfile catch rejections from the db layer and echo err.message into the JSON response body. The rejections originate from sqlite3, so the caller receives the driver's own text - which for a malformed statement includes the SQL fragment and the column or table name that failed.",
+      "impact": "Turns the injection points above into a much faster attack: an attacker probing the id route gets parse errors back in the response body, revealing the schema and confirming payload syntax without blind-injection guesswork.",
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 9,
+          "quote": ".catch((err) => res.status(500).json({ error: err.message }));"
+        }
+      ],
+      "corroboration": 1,
+      "patchIds": []
+    },
+    {
+      "id": "I15",
+      "title": "isProfileId and normalizeProfile are exported and reachable from the HTTP handlers but no test references them",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "tests"
+      ],
+      "standard": [],
+      "detail": "test/validate.test.js is the only test file and it imports exactly one symbol, isPostcode. isProfileId is the guard on the :id path parameter that reaches the string-interpolated SQL in findProfile, and normalizeProfile is the only place age is coerced from user input and email is trimmed and lowercased. Uncovered branches that matter: the {6,36} length bounds and the anchoring of the isProfileId pattern - the branch deciding whether an id containing a quote is rejected - and normalizeProfile's age branch, where Number() on a non-numeric string yields NaN and on true yields 1, both silently persisted.",
+      "impact": "The two validators guarding the request surface can be weakened or broken by an edit with a fully green suite. A regression that unanchors the isProfileId regex would remove the only input restriction in front of the interpolated query, and nothing in the repo would notice.",
+      "evidence": [
+        {
+          "file": "test/validate.test.js",
+          "line": 3,
+          "quote": "import { isPostcode } from '../src/validate.js';"
+        },
+        {
+          "file": "src/validate.js",
+          "line": 6,
+          "quote": "return typeof value === 'string' && /^[a-z0-9-]{6,36}$/.test(value);"
+        },
+        {
+          "file": "src/validate.js",
+          "line": 13,
+          "quote": "if (out.age != null) out.age = Number(out.age);"
+        }
+      ],
+      "corroboration": 1,
+      "patchIds": []
+    },
+    {
+      "id": "I16",
+      "title": "No lockfile, so transitive dependencies of express and sqlite3 resolve differently on every install",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "infra"
+      ],
+      "standard": [
+        "SSDF-PW.4.1",
+        "Scorecard:Pinned-Dependencies"
+      ],
+      "detail": "package.json declares express, sqlite3 and eslint, but no package-lock.json, npm-shrinkwrap.json, yarn.lock or pnpm-lock.yaml exists. The direct versions are pinned exactly, so the top level is stable - the entire transitive closure underneath them is not. Two developers installing a week apart get different dependency trees from the same commit. `npm ci` cannot be used at all: it requires a lockfile and exits non-zero without one.",
+      "impact": "Builds are not reproducible from the commit; a transitive package published between two installs silently enters the tree. It also removes the integrity-hash check that a lockfile provides, which is the mechanism that would catch a tampered or substituted transitive package.",
+      "evidence": [
+        {
+          "file": "package-lock.json",
+          "line": 0,
+          "quote": "ABSENT: glob '{package-lock.json,npm-shrinkwrap.json,yarn.lock,pnpm-lock.yaml}' returned 0 files"
+        },
+        {
+          "file": "package.json",
+          "line": 14,
+          "quote": "\"express\": \"4.17.1\""
+        }
+      ],
+      "corroboration": 1,
+      "patchIds": []
+    },
+    {
+      "id": "I17",
+      "title": "GET /api/profiles returns the entire profiles table with no LIMIT or pagination",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "domains": [
+        "performance"
+      ],
+      "standard": [
+        "API4:2023",
+        "CWE-770"
+      ],
+      "detail": "allProfiles() issues an unfiltered SELECT with no LIMIT, OFFSET, or cursor, and listProfiles serializes every row straight into the JSON response. There is no caller-supplied bound and no server-side cap, so response size and heap usage grow linearly with the table, which grows on every unauthenticated POST.",
+      "impact": "Once the table is large, a single request buffers every row in memory and serializes it, pegging the event loop during JSON.stringify. The table size is attacker-controlled via the open POST route, so a caller can grow the cost of this endpoint without limit.",
+      "evidence": [
+        {
+          "file": "src/db.js",
+          "line": 27,
+          "quote": "db.all('SELECT * FROM profiles', (err, rows)"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 22,
+          "quote": "allProfiles().then((rows) => res.json(rows));"
+        }
+      ],
+      "corroboration": 1,
+      "patchIds": [
+        "P9"
+      ]
+    },
+    {
+      "id": "I18",
+      "title": "Listen port and sqlite database path are hardcoded with no environment override",
+      "severity": "low",
+      "confidence": "confirmed",
+      "domains": [
+        "infra",
+        "maintainability"
+      ],
+      "standard": [
+        "API8:2023"
+      ],
+      "detail": "src/server.js binds a literal port with no PORT fallback, and src/db.js opens the database at a relative path, which resolves against the process working directory rather than a configured data location. Together these are the only two deployment knobs the service has and neither is settable without editing source. The relative path in particular means the same checkout started from two different working directories silently opens two different databases and reports no error.",
+      "impact": "The service cannot be run twice on one host, cannot be placed behind a platform that assigns a port, and its data file location depends on how the process happened to be launched - a class of bug that presents as 'the profiles disappeared'.",
+      "evidence": [
+        {
+          "file": "src/server.js",
+          "line": 11,
+          "quote": "app.listen(3000, () => console.log('listening on 3000'));"
+        },
+        {
+          "file": "src/db.js",
+          "line": 3,
+          "quote": "new sqlite3.Database('./profiles.db')"
+        },
+        {
+          "file": "src/server.js",
+          "line": 11,
+          "quote": "app.listen(3000, () => console.log('listening on 3000'));"
+        }
+      ],
+      "corroboration": 2,
+      "patchIds": [
+        "P10",
+        "P11"
+      ]
+    },
+    {
+      "id": "I19",
+      "title": "No deletion path exists for stored profiles",
+      "severity": "low",
+      "confidence": "confirmed",
+      "domains": [
+        "privacy"
+      ],
+      "standard": [
+        "ASVS-V14"
+      ],
+      "detail": "The data layer exports exactly three functions - findProfile, saveProfile, allProfiles - none of which removes a row. The route table registers only two GETs and one POST; there is no DELETE verb and no handler that reaches a removal. A case-insensitive grep for delete|erase|purge|remove across the whole directory returned no matches. The cascade problem compounds it: even if a row were removed, the copies made by logRequest and by the geo egress would persist independently.",
+      "impact": "A user's profile, once written, cannot be removed by any code path in this service. Operators would have to reach the database file by hand, and would still leave the log-stream and third-party copies behind.",
+      "evidence": [
+        {
+          "file": "src/db.js",
+          "line": 25,
+          "quote": "export function allProfiles() {"
+        },
+        {
+          "file": "src/server.js",
+          "line": 8,
+          "quote": "app.post('/api/profile', postProfile);"
+        }
+      ],
+      "repro": "$ rg -i 'delete|erase|purge|remove' examples/demo-repo\nNo matches found",
+      "corroboration": 1,
+      "patchIds": []
+    },
+    {
+      "id": "I20",
+      "title": "Dependencies pinned years behind with no automated update tooling to surface advisories",
+      "severity": "low",
+      "confidence": "confirmed",
+      "domains": [
+        "infra"
+      ],
+      "standard": [
+        "CWE-1104",
+        "Scorecard:Dependency-Update-Tool"
+      ],
+      "detail": "express is pinned at exactly 4.17.1 and sqlite3 at exactly 5.0.2 - both multiple minor versions behind their lines, and the exact pins mean they will never move on their own. There is simultaneously no Dependabot, Renovate, or equivalent configuration, so nothing opens a PR when an advisory lands against either. No vulnerability is claimed in either package: npm audit requires a lockfile and node_modules and could not be run, so no advisory id was observed. The finding is the maintenance posture, not a known CVE.",
+      "impact": "An advisory published against these versions reaches this repo only when a human decides to look, and the exact pins mean even a fresh install will not pick up a patch release.",
+      "evidence": [
+        {
+          "file": "package.json",
+          "line": 14,
+          "quote": "\"express\": \"4.17.1\""
+        },
+        {
+          "file": "package.json",
+          "line": 15,
+          "quote": "\"sqlite3\": \"5.0.2\""
+        },
+        {
+          "file": ".github/dependabot.yml",
+          "line": 0,
+          "quote": "ABSENT: glob '{.github/dependabot.yml,renovate.json,.renovaterc*}' returned 0 files"
+        }
+      ],
+      "corroboration": 1,
+      "patchIds": []
+    }
+  ],
+  "tests": [
+    {
+      "name": "unit (node:test)",
+      "command": "npm test",
+      "status": "fail",
+      "summary": "Runner aborted before executing any test: MODULE_NOT_FOUND on the 'test' directory argument. 0 passed, 1 failed, exit 1. Corrected invocation (`node --test`) runs 2 tests, 2 passed.",
+      "output": "> demo-profile-service@0.3.1 test\n> node --test test/\n\nError: Cannot find module '...\\examples\\demo-repo\\test'\n  code: 'MODULE_NOT_FOUND'\n\nx test (63.5458ms)\ni tests 1\ni suites 0\ni pass 0\ni fail 1\ni duration_ms 72.4078"
+    },
+    {
+      "name": "lint (eslint)",
+      "command": "npm run lint",
+      "status": "not-run",
+      "bootstrap": "npm install",
+      "summary": "eslint is not installed (node_modules/ absent) and `npx --no-install eslint --version` refused to fetch it. No eslint config file exists in the repo either, so the configured command would additionally need a flat config to produce results.",
+      "output": "$ npx --no-install eslint --version\nnpm error npx canceled due to missing packages and no YES option: [\"eslint@10.7.0\"]\n\n$ ls node_modules\nls: cannot access 'node_modules': No such file or directory"
+    },
+    {
+      "name": "typecheck",
+      "command": "n/a",
+      "status": "not-run",
+      "bootstrap": "n/a - plain JavaScript project, no tsconfig.json and no typechecker configured",
+      "summary": "No typechecker is configured for this project; nothing to run.",
+      "output": ""
+    }
+  ],
+  "security": [
+    {
+      "id": "F4",
+      "issueId": "I2",
+      "title": "Third-party API key falls back to a hardcoded literal in tracked source",
+      "severity": "high",
+      "confidence": "confirmed",
+      "detail": "GEO_API_KEY has a fail-open fallback to the committed literal. When the environment variable is unset the service does not fail - it silently authenticates with the key baked into the repository. The literal is present in git history from the initial import, so deleting the line does not revoke it.",
+      "impact": "Anyone with read access to the repo, or to any clone or fork of it, holds whatever the key authorizes. Because it is in history, remediation requires rotating the credential at the provider. The fallback also hides misconfiguration: a deploy missing the env var looks healthy.",
+      "standard": [
+        "CWE-798",
+        "ASVS-V13"
+      ],
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 3,
+          "quote": "const GEO_KEY = process.env.GEO_API_KEY || 'sk-demo-2f9a41c07be34d18';"
+        }
+      ],
+      "repro": "$ git log -S 'sk-demo-2f9a41c07be34d18' --oneline -- examples/demo-repo\n4204f28 Scaffold repo, doctrine, demo fixture, and grounding gate"
+    },
+    {
+      "id": "F5",
+      "issueId": "I3",
+      "title": "SQL injection and mass assignment: request body keys become column names in an INSERT",
+      "severity": "high",
+      "confidence": "confirmed",
+      "detail": "postProfile assigns req.body directly to profile (routes.js:14) and hands it to saveProfile, which derives the column list from Object.keys and the value list from Object.values, quoting values by string concatenation (db.js:16-18). Identifier positions cannot be fixed by parameter binding at all, so the fix is an explicit allowlist of columns, not just placeholders.",
+      "impact": "An unauthenticated caller controls the text of an executed INSERT and the set of columns written. Beyond injection, this is mass assignment: any column the schema has can be set by adding a key to the JSON body.",
+      "standard": [
+        "CWE-89",
+        "CWE-20",
+        "ASVS-V1.2"
+      ],
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 14,
+          "quote": "const profile = req.body;"
+        },
+        {
+          "file": "src/db.js",
+          "line": 16,
+          "quote": "const cols = Object.keys(profile).join(', ');"
+        },
+        {
+          "file": "src/db.js",
+          "line": 17,
+          "quote": "const vals = Object.values(profile).map((v) => `'${v}'`).join(', ');"
+        }
+      ]
+    },
+    {
+      "id": "F6",
+      "issueId": "I3",
+      "title": "Request body keys become INSERT column names - unrestricted mass assignment on POST /api/profile",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "postProfile assigns req.body wholesale to profile with no field allowlist, and saveProfile derives the column list from Object.keys(profile). The caller therefore chooses which columns are written, not the server. Any column that exists on the profiles table - including the primary key id, or any role/verified flag column - is settable directly from the request body. normalizeProfile and isProfileId exist but neither is imported by src/routes.js.",
+      "impact": "A caller can set fields the server never intended to expose for write, most importantly choosing their own id value to collide with or shadow an existing profile.",
+      "standard": [
+        "CWE-639",
+        "API3:2023"
+      ],
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 14,
+          "quote": "const profile = req.body;"
+        },
+        {
+          "file": "src/db.js",
+          "line": 16,
+          "quote": "const cols = Object.keys(profile).join(', ');"
+        },
+        {
+          "file": "src/validate.js",
+          "line": 9,
+          "quote": "export function normalizeProfile(profile) {"
+        }
+      ]
+    },
+    {
+      "id": "F8",
+      "issueId": "I5",
+      "title": "SQL injection: profile id from the URL is interpolated into a SELECT",
+      "severity": "high",
+      "confidence": "confirmed",
+      "detail": "GET /api/profile/:id passes req.params.id straight to findProfile (routes.js:7), which builds the query by template literal with the value inside single quotes (db.js:7). Nothing between the route and the query escapes or validates it - src/validate.js exports isProfileId but is never imported anywhere in src/.",
+      "impact": "An unauthenticated caller reads any row in the profiles table, and with a UNION-style payload can enumerate the whole SQLite schema and every stored profile.",
+      "standard": [
+        "CWE-89",
+        "ASVS-V1.2",
+        "API8:2023"
+      ],
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 7,
+          "quote": "findProfile(req.params.id)"
+        },
+        {
+          "file": "src/db.js",
+          "line": 7,
+          "quote": "db.get(`SELECT * FROM profiles WHERE id = '${id}'`, (err, row) => {"
+        }
+      ]
+    },
+    {
+      "id": "F9",
+      "issueId": "I6",
+      "title": "Every read route is reachable unauthenticated; GET /api/profiles dumps the whole profile table",
+      "severity": "high",
+      "confidence": "confirmed",
+      "detail": "src/server.js registers three routes and applies exactly one piece of middleware, express.json(). There is no auth middleware, no session lookup, and no per-route guard. getProfile takes req.params.id straight to findProfile() and returns the row; identity is never read from the request and never compared against any owner field, because no identity exists anywhere in the codebase. listProfiles returns allProfiles() with no filter at all.",
+      "impact": "Any anonymous caller who can reach the port can read any individual profile by enumerating its id, or skip enumeration entirely and retrieve every stored profile with a single unauthenticated request.",
+      "standard": [
+        "CWE-306",
+        "API1:2023",
+        "ASVS-V8"
+      ],
+      "evidence": [
+        {
+          "file": "src/server.js",
+          "line": 5,
+          "quote": "app.use(express.json());"
+        },
+        {
+          "file": "src/server.js",
+          "line": 9,
+          "quote": "app.get('/api/profiles', listProfiles);"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 22,
+          "quote": "allProfiles().then((rows) => res.json(rows));"
+        }
+      ]
+    },
+    {
+      "id": "F10",
+      "issueId": "I7",
+      "title": "POST /api/profile writes to the profile store with no authentication",
+      "severity": "high",
+      "confidence": "confirmed",
+      "detail": "src/server.js registers postProfile as the sole handler for POST /api/profile. No guard precedes it and none is installed globally - the only app.use() in the file is express.json(). postProfile reads req.body into a local and hands it directly to saveProfile(), which performs an INSERT. Nothing between the socket and the write establishes or checks a caller identity.",
+      "impact": "An anonymous caller can insert arbitrary rows into the profiles table with no rate limit or ownership constraint, polluting the data other users read back, and driving unbounded growth of the database file.",
+      "standard": [
+        "CWE-306",
+        "CWE-862",
+        "API5:2023"
+      ],
+      "evidence": [
+        {
+          "file": "src/server.js",
+          "line": 8,
+          "quote": "app.post('/api/profile', postProfile);"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 15,
+          "quote": "saveProfile(profile)"
+        }
+      ]
+    },
+    {
+      "id": "F12",
+      "issueId": "I8",
+      "title": "API key sent in a query string over plaintext http://",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "BASE is a plaintext http:// origin and lookupRegion appends the credential as a query parameter. The request carries the key in cleartext, and it is in the URL rather than a header.",
+      "impact": "Any network position between the service and the provider reads the key off the wire. Credentials in a query string are recorded where a header is not - proxy access logs, the provider's own request logs, and Referer headers on any redirect - so the key leaks into systems nobody thinks to scrub. Also carries the caller's postcode in the clear.",
+      "standard": [
+        "CWE-319",
+        "ASVS-V12"
+      ],
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 5,
+          "quote": "const BASE = 'http://geo.example.com/v1';"
+        },
+        {
+          "file": "src/client.js",
+          "line": 8,
+          "quote": "const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);"
+        }
+      ]
+    },
+    {
+      "id": "F14",
+      "issueId": "I9",
+      "title": "Postcode interpolated into the outbound URL without encoding",
+      "severity": "low",
+      "confidence": "confirmed",
+      "detail": "lookupRegion builds the request URL with no encodeURIComponent. postcode arrives from req.body unvalidated (isPostcode is never called). A body value of \"30301&key=attacker\" appends an extra query parameter ahead of the real key.",
+      "impact": "A caller shapes the outbound request's query string. The host is a fixed literal so this is not SSRF, and last-wins parameter handling limits the effect at most providers - hence low - but it lets a caller override or append parameters on a credentialed third-party call.",
+      "standard": [
+        "CWE-20",
+        "ASVS-V12"
+      ],
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 8,
+          "quote": "const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);"
+        }
+      ]
+    },
+    {
+      "id": "F16",
+      "issueId": "I10",
+      "title": "Validation module exists but no handler imports it",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "src/validate.js exports isProfileId (a check that would have blocked the id injection), isPostcode, and normalizeProfile. No route, no db function, and no client function imports any of them. getProfile passes req.params.id unchecked, postProfile passes req.body unchecked, and lookupRegion passes profile.postcode unchecked.",
+      "impact": "The team wrote exactly the constraints that would have contained the two injection findings above and never wired them in, so the code reads as validated to a reviewer skimming the file list while every handler is unguarded. The fix is small and already written.",
+      "standard": [
+        "CWE-20",
+        "ASVS-V2"
+      ],
+      "evidence": [
+        {
+          "file": "src/validate.js",
+          "line": 5,
+          "quote": "export function isProfileId(value) {"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 7,
+          "quote": "findProfile(req.params.id)"
+        },
+        {
+          "file": "src/client.js",
+          "line": 15,
+          "quote": "profile.region = await lookupRegion(profile.postcode);"
+        }
+      ],
+      "repro": "$ grep -rn \"validate\" examples/demo-repo/src/\n(no output)"
+    },
+    {
+      "id": "F21",
+      "issueId": "I14",
+      "title": "Driver error text returned verbatim to the caller in 500 responses",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "Both getProfile and postProfile catch rejections from the db layer and echo err.message into the JSON response body. The rejections originate from sqlite3, so the caller receives the driver's own text - which for a malformed statement includes the SQL fragment and the column or table name that failed.",
+      "impact": "Turns the injection points above into a much faster attack: an attacker probing the id route gets parse errors back in the response body, revealing the schema and confirming payload syntax without blind-injection guesswork.",
+      "standard": [
+        "CWE-209",
+        "API8:2023"
+      ],
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 9,
+          "quote": ".catch((err) => res.status(500).json({ error: err.message }));"
+        }
+      ]
+    }
+  ],
+  "privacy": [
+    {
+      "id": "F2",
+      "issueId": "I1",
+      "title": "GET /api/profiles returns every stored profile record, unauthenticated",
+      "severity": "high",
+      "confidence": "confirmed",
+      "detail": "listProfiles calls allProfiles(), which runs an unfiltered SELECT, and serialises the full result set straight to the response with no field allowlist and no caller scoping. The route is mounted with no auth middleware. The profile records carry email, age and postcode, so a single unauthenticated request returns the entire user base's contact and location data. This overlaps security-authz-identity's function-level check; the finding here is the bulk data exposure itself.",
+      "impact": "Anyone who can reach the service can export every user's email, age and postcode in one request. Nothing in the response path limits which columns leave - a column added to the profiles table later is exposed automatically.",
+      "standard": [
+        "CWE-200",
+        "API3:2023",
+        "ASVS-V14"
+      ],
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 22,
+          "quote": "allProfiles().then((rows) => res.json(rows));"
+        },
+        {
+          "file": "src/db.js",
+          "line": 27,
+          "quote": "db.all('SELECT * FROM profiles', (err, rows) => {"
+        },
+        {
+          "file": "src/server.js",
+          "line": 9,
+          "quote": "app.get('/api/profiles', listProfiles);"
+        }
+      ]
+    },
+    {
+      "id": "F11",
+      "issueId": "I8",
+      "title": "User postcode is sent to a third-party geo API over cleartext HTTP",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "enrich() passes profile.postcode into lookupRegion, which builds a URL against a plaintext http:// base and places the postcode in the query string. postProfile calls enrich(saved) for every profile written, so each write ships a user's postcode to an external party in the clear. The postcode also lands in that third party's access logs by virtue of being a query parameter rather than a request body.",
+      "impact": "Any network observer between the service and the provider sees each user's postcode, correlated with the request timing of their signup. The egress happens unconditionally on every write with no opt-out, and the postcode is retained in the third party's URL logs outside this system's control.",
+      "standard": [
+        "CWE-200",
+        "ASVS-V14"
+      ],
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 5,
+          "quote": "const BASE = 'http://geo.example.com/v1';"
+        },
+        {
+          "file": "src/client.js",
+          "line": 8,
+          "quote": "await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 16,
+          "quote": ".then((saved) => enrich(saved))"
+        }
+      ]
+    },
+    {
+      "id": "F18",
+      "issueId": "I11",
+      "title": "logRequest writes the full request body to stdout on every profile write",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "src/log.js interpolates JSON.stringify(req.body) into a console.log line. postProfile calls logRequest(req) before saving, so the complete submitted profile - email, age, postcode, and any other field the client sends - is emitted verbatim to stdout for every write. There is no redaction or field allowlist anywhere in the log path.",
+      "impact": "Personal data is duplicated from the database into the process log stream, which typically has wider read access and longer retention than the database file, and is outside any deletion the application performs. Deleting a user's row would not remove these copies.",
+      "standard": [
+        "CWE-532",
+        "ASVS-V16"
+      ],
+      "evidence": [
+        {
+          "file": "src/log.js",
+          "line": 2,
+          "quote": "body=${JSON.stringify(req.body)}"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 13,
+          "quote": "logRequest(req);"
+        }
+      ]
+    },
+    {
+      "id": "F26",
+      "issueId": "I19",
+      "title": "No deletion path exists for stored profiles",
+      "severity": "low",
+      "confidence": "confirmed",
+      "detail": "The data layer exports exactly three functions - findProfile, saveProfile, allProfiles - none of which removes a row. The route table registers only two GETs and one POST; there is no DELETE verb and no handler that reaches a removal. A case-insensitive grep for delete|erase|purge|remove across the whole directory returned no matches. The cascade problem compounds it: even if a row were removed, the copies made by logRequest and by the geo egress would persist independently.",
+      "impact": "A user's profile, once written, cannot be removed by any code path in this service. Operators would have to reach the database file by hand, and would still leave the log-stream and third-party copies behind.",
+      "standard": [
+        "ASVS-V14"
+      ],
+      "evidence": [
+        {
+          "file": "src/db.js",
+          "line": 25,
+          "quote": "export function allProfiles() {"
+        },
+        {
+          "file": "src/server.js",
+          "line": 8,
+          "quote": "app.post('/api/profile', postProfile);"
+        }
+      ],
+      "repro": "$ rg -i 'delete|erase|purge|remove' examples/demo-repo\nNo matches found"
+    }
+  ],
+  "accessibility": [],
+  "performance": [
+    {
+      "id": "F13",
+      "issueId": "I9",
+      "title": "Outbound geo fetch has no timeout, so a slow dependency holds request handlers open indefinitely",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "lookupRegion awaits a bare fetch with no AbortSignal, no timeout option, and no concurrency cap. Node's fetch has no default request timeout, so a provider that accepts connections and never responds parks the await forever. enrich sits on the POST write path, so every write request inherits that unbounded wait.",
+      "impact": "A hung (not failed) third-party becomes an outage of the write path: connections and promise state accumulate with no upper bound while the empty catch guarantees none of it is logged. Because there is no timeout the requests never even reach the 500 handler; they just never finish.",
+      "standard": [
+        "CWE-770"
+      ],
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 8,
+          "quote": "const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 16,
+          "quote": ".then((saved) => enrich(saved))"
+        }
+      ]
+    },
+    {
+      "id": "F23",
+      "issueId": "I17",
+      "title": "GET /api/profiles returns the entire profiles table with no LIMIT or pagination",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "allProfiles() issues an unfiltered SELECT with no LIMIT, OFFSET, or cursor, and listProfiles serializes every row straight into the JSON response. There is no caller-supplied bound and no server-side cap, so response size and heap usage grow linearly with the table, which grows on every unauthenticated POST.",
+      "impact": "Once the table is large, a single request buffers every row in memory and serializes it, pegging the event loop during JSON.stringify. The table size is attacker-controlled via the open POST route, so a caller can grow the cost of this endpoint without limit.",
+      "standard": [
+        "CWE-770",
+        "API4:2023"
+      ],
+      "evidence": [
+        {
+          "file": "src/db.js",
+          "line": 27,
+          "quote": "db.all('SELECT * FROM profiles', (err, rows)"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 22,
+          "quote": "allProfiles().then((rows) => res.json(rows));"
+        }
+      ]
+    }
+  ],
+  "maintainability": [
+    {
+      "id": "F1",
+      "issueId": "I1",
+      "title": "listProfiles has no rejection handler, so a DB error hangs the request instead of answering it",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "getProfile and postProfile both terminate their promise chains with a .catch that returns 500. listProfiles does not. If db.all rejects - locked database, missing table, corrupt file - nothing calls res, the client receives no status at all, and Node emits an unhandled rejection which on Node 15+ terminates the process by default.",
+      "impact": "A transient error on this one route turns into a hung connection plus a process exit rather than a 500. The failure is invisible in logs, so the error-rate golden signal reads zero while the endpoint is down.",
+      "standard": [
+        "ASVS-V16"
+      ],
+      "evidence": [
+        {
+          "file": "src/routes.js",
+          "line": 22,
+          "quote": "allProfiles().then((rows) => res.json(rows));"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 18,
+          "quote": ".catch((err) => res.status(500).json({ error: err.message }));"
+        }
+      ]
+    },
+    {
+      "id": "F15",
+      "issueId": "I10",
+      "title": "isProfileId and normalizeProfile are exported validation helpers with no call sites",
+      "severity": "low",
+      "confidence": "confirmed",
+      "detail": "src/validate.js exports isProfileId and normalizeProfile. A grep across the whole directory returns only their definition lines - neither is imported anywhere, and routes.js imports nothing from validate.js. isProfileId matches exactly the shape of req.params.id consumed by getProfile, and normalizeProfile matches the raw req.body assigned in postProfile; the safety net was written for these two call sites and never wired to them.",
+      "impact": "The next reader sees a validation module and reasonably assumes inputs are validated. In fact req.params.id flows unchecked into a string-interpolated SQL query and req.body flows unchecked into a column-list-from-keys INSERT. The presence of the unused helpers actively misleads about the state of input handling.",
+      "standard": [],
+      "evidence": [
+        {
+          "file": "src/validate.js",
+          "line": 5,
+          "quote": "export function isProfileId(value) {"
+        },
+        {
+          "file": "src/routes.js",
+          "line": 1,
+          "quote": "import { findProfile, saveProfile, allProfiles } from './db.js';"
+        }
+      ],
+      "repro": "$ rg -n 'isProfileId|normalizeProfile' examples/demo-repo\nexamples/demo-repo/src/validate.js:5:export function isProfileId(value) {\nexamples/demo-repo/src/validate.js:9:export function normalizeProfile(profile) {"
+    },
+    {
+      "id": "F17",
+      "issueId": "I11",
+      "title": "No latency, traffic, or error signal is emitted: logRequest is an unstructured string and logError is never called",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "logRequest emits a single concatenated console.log line with method, url and body, and is called before the handler does any work, so no request duration is ever recorded. logError is exported from src/log.js but has zero call sites in the repo, so every error path reports to the client and to nothing else. The four golden signals resolve as: latency unmeasurable, errors uncounted, traffic only greppable out of plain text, saturation absent.",
+      "impact": "An operator of this service cannot answer 'is it slow?' or 'what is the error rate?' at all. Diagnosing a report of slowness requires reading raw stdout by hand and correlating timestamps, and a rising 500 rate produces no signal anywhere until a user complains.",
+      "standard": [
+        "ASVS-V16"
+      ],
+      "evidence": [
+        {
+          "file": "src/log.js",
+          "line": 2,
+          "quote": "console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} body=${JSON.stringify(req.body)}`);"
+        },
+        {
+          "file": "src/log.js",
+          "line": 5,
+          "quote": "export function logError(err) {"
+        }
+      ]
+    },
+    {
+      "id": "F20",
+      "issueId": "I13",
+      "title": "enrich() swallows every geo-lookup failure in an empty catch block",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "The catch in enrich has an empty body - no log, no counter, no rethrow. Any failure of lookupRegion (DNS failure, non-2xx response, invalid JSON, network timeout) leaves profile.region undefined and the profile is returned to the client as a normal 200.",
+      "impact": "A total outage of the geo dependency is byte-identical, from the outside and in the logs, to a profile whose postcode legitimately has no region. Nobody is paged, no error rate moves, and the only symptom is profiles silently missing a field - typically discovered weeks later from downstream data.",
+      "standard": [
+        "ASVS-V16"
+      ],
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 16,
+          "quote": "} catch (err) {"
+        },
+        {
+          "file": "src/client.js",
+          "line": 15,
+          "quote": "profile.region = await lookupRegion(profile.postcode);"
+        }
+      ]
+    },
+    {
+      "id": "F25",
+      "issueId": "I18",
+      "title": "No health endpoint and no SIGTERM handler on a service that listens on a port",
+      "severity": "low",
+      "confidence": "confirmed",
+      "detail": "server.js registers three business routes and calls app.listen directly. There is no /health or /ready route for a load balancer or orchestrator to probe, and no SIGTERM handler, so the only shutdown path is an abrupt process kill. In-flight requests - including the POST, which performs a DB insert and then an untimed outbound fetch - are severed mid-flight on every deploy.",
+      "impact": "An orchestrator has no way to distinguish 'process started' from 'ready to serve', so traffic is routed to instances before the database is reachable. On rollout, writes that have inserted a row but not yet enriched are cut, leaving persisted profiles with no region and no record that enrichment was interrupted.",
+      "standard": [],
+      "evidence": [
+        {
+          "file": "src/server.js",
+          "line": 11,
+          "quote": "app.listen(3000, () => console.log('listening on 3000'));"
+        }
+      ]
+    }
+  ],
+  "infra": [
+    {
+      "id": "F3",
+      "issueId": "I2",
+      "title": "GEO_API_KEY is read at startup but documented nowhere, and there is no .env.example",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "src/client.js is the only process.env read in the repo. The variable name appears in no other file - README.md does not mention it, there is no .env.example, and there is no CI config that would otherwise document it. Worse than an undocumented variable that fails loudly: because of the fallback the service starts and serves traffic with the placeholder key, so a deployment that forgot to set it looks healthy and only fails at the third-party call - which the empty catch swallows. The hardcoded literal itself is the security slice's territory; the infra defect is that the deploy-time contract is written down nowhere.",
+      "impact": "A new contributor or a new environment has no way to learn the variable exists short of reading src/client.js. Misconfiguration is undetectable at boot and silently degrades enrichment rather than failing the deploy.",
+      "standard": [
+        "API8:2023"
+      ],
+      "evidence": [
+        {
+          "file": "src/client.js",
+          "line": 3,
+          "quote": "process.env.GEO_API_KEY"
+        },
+        {
+          "file": ".env.example",
+          "line": 0,
+          "quote": "ABSENT: glob '{.env.example,.env.sample,.env.template}' returned 0 files"
+        }
+      ]
+    },
+    {
+      "id": "F7",
+      "issueId": "I4",
+      "title": "npm run lint cannot succeed: eslint 8 is configured by the manifest but no eslint config file exists",
+      "severity": "low",
+      "confidence": "inferred",
+      "detail": "package.json declares a lint script and pins eslint 8.57.0 as a devDependency, but the repo contains no .eslintrc, no eslint.config.*, and no eslintConfig key in package.json. ESLint 8 resolves config by walking up from the target files and exits with an error when it finds none, so the declared lint gate cannot pass on any input. Marked inferred rather than confirmed because node_modules/ is absent by design and installing is not permitted, so the command could not be executed and its output pasted.",
+      "impact": "The repo advertises a lint gate that does not exist. Anyone wiring CI later will add the lint step, watch it fail for a reason unrelated to code quality, and most likely delete the step rather than add the missing config.",
+      "standard": [
+        "Scorecard:SAST"
+      ],
+      "evidence": [
+        {
+          "file": "package.json",
+          "line": 11,
+          "quote": "\"lint\": \"eslint src/\""
+        },
+        {
+          "file": "eslint.config.js",
+          "line": 0,
+          "quote": "ABSENT: glob '{eslint.config.*,.eslintrc*}' returned 0 files"
+        }
+      ]
+    },
+    {
+      "id": "F19",
+      "issueId": "I12",
+      "title": "No CI configuration at all, so the existing test suite gates nothing",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "package.json declares a runnable suite and a lint script, but the repo contains no workflow directory of any kind: no .github/workflows, no .gitlab-ci.yml, no Jenkinsfile, no circle or travis config. Nothing executes the tests or the lint on push or on a pull request, and there is no SAST step either. The suite is real code that runs only when someone remembers to run it locally.",
+      "impact": "Any change to the validators, routes, or data layer can be merged with the suite red or the lint gate failing, and nobody finds out until runtime. The one automated quality signal this repo possesses is never consulted.",
+      "standard": [
+        "Scorecard:CI-Tests",
+        "Scorecard:SAST"
+      ],
+      "evidence": [
+        {
+          "file": ".github/workflows",
+          "line": 0,
+          "quote": "ABSENT: glob '.github/workflows/*.{yml,yaml}' returned 0 files"
+        },
+        {
+          "file": "package.json",
+          "line": 10,
+          "quote": "\"test\": \"node --test test/\""
+        }
+      ]
+    },
+    {
+      "id": "F22",
+      "issueId": "I16",
+      "title": "No lockfile, so transitive dependencies of express and sqlite3 resolve differently on every install",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "detail": "package.json declares express, sqlite3 and eslint, but no package-lock.json, npm-shrinkwrap.json, yarn.lock or pnpm-lock.yaml exists. The direct versions are pinned exactly, so the top level is stable - the entire transitive closure underneath them is not. Two developers installing a week apart get different dependency trees from the same commit. `npm ci` cannot be used at all: it requires a lockfile and exits non-zero without one.",
+      "impact": "Builds are not reproducible from the commit; a transitive package published between two installs silently enters the tree. It also removes the integrity-hash check that a lockfile provides, which is the mechanism that would catch a tampered or substituted transitive package.",
+      "standard": [
+        "Scorecard:Pinned-Dependencies",
+        "SSDF-PW.4.1"
+      ],
+      "evidence": [
+        {
+          "file": "package-lock.json",
+          "line": 0,
+          "quote": "ABSENT: glob '{package-lock.json,npm-shrinkwrap.json,yarn.lock,pnpm-lock.yaml}' returned 0 files"
+        },
+        {
+          "file": "package.json",
+          "line": 14,
+          "quote": "\"express\": \"4.17.1\""
+        }
+      ]
+    },
+    {
+      "id": "F24",
+      "issueId": "I18",
+      "title": "Listen port and sqlite database path are hardcoded with no environment override",
+      "severity": "low",
+      "confidence": "confirmed",
+      "detail": "src/server.js binds a literal port with no PORT fallback, and src/db.js opens the database at a relative path, which resolves against the process working directory rather than a configured data location. Together these are the only two deployment knobs the service has and neither is settable without editing source. The relative path in particular means the same checkout started from two different working directories silently opens two different databases and reports no error.",
+      "impact": "The service cannot be run twice on one host, cannot be placed behind a platform that assigns a port, and its data file location depends on how the process happened to be launched - a class of bug that presents as 'the profiles disappeared'.",
+      "standard": [
+        "API8:2023"
+      ],
+      "evidence": [
+        {
+          "file": "src/server.js",
+          "line": 11,
+          "quote": "app.listen(3000, () => console.log('listening on 3000'));"
+        },
+        {
+          "file": "src/db.js",
+          "line": 3,
+          "quote": "new sqlite3.Database('./profiles.db')"
+        }
+      ]
+    },
+    {
+      "id": "F27",
+      "issueId": "I20",
+      "title": "Dependencies pinned years behind with no automated update tooling to surface advisories",
+      "severity": "low",
+      "confidence": "confirmed",
+      "detail": "express is pinned at exactly 4.17.1 and sqlite3 at exactly 5.0.2 - both multiple minor versions behind their lines, and the exact pins mean they will never move on their own. There is simultaneously no Dependabot, Renovate, or equivalent configuration, so nothing opens a PR when an advisory lands against either. No vulnerability is claimed in either package: npm audit requires a lockfile and node_modules and could not be run, so no advisory id was observed. The finding is the maintenance posture, not a known CVE.",
+      "impact": "An advisory published against these versions reaches this repo only when a human decides to look, and the exact pins mean even a fresh install will not pick up a patch release.",
+      "standard": [
+        "CWE-1104",
+        "Scorecard:Dependency-Update-Tool"
+      ],
+      "evidence": [
+        {
+          "file": "package.json",
+          "line": 14,
+          "quote": "\"express\": \"4.17.1\""
+        },
+        {
+          "file": "package.json",
+          "line": 15,
+          "quote": "\"sqlite3\": \"5.0.2\""
+        },
+        {
+          "file": ".github/dependabot.yml",
+          "line": 0,
+          "quote": "ABSENT: glob '{.github/dependabot.yml,renovate.json,.renovaterc*}' returned 0 files"
+        }
+      ]
+    }
+  ],
+  "patches": [
+    {
+      "id": "P1",
+      "sourceIssueId": "I1",
+      "file": "src/routes.js",
+      "diff": "--- a/src/routes.js\n+++ b/src/routes.js\n@@\n-export function listProfiles(req, res) {\n-  allProfiles().then((rows) => res.json(rows));\n-}\n+export function listProfiles(req, res) {\n+  allProfiles()\n+    .then((rows) => res.json(rows))\n+    .catch((err) => res.status(500).json({ error: err.message }));\n+}\n",
+      "rationale": "listProfiles has no rejection handler; a DB error becomes an unhandled rejection and kills the server process"
+    },
+    {
+      "id": "P2",
+      "sourceIssueId": "I2",
+      "file": "src/client.js",
+      "diff": "--- a/src/client.js\n+++ b/src/client.js\n@@\n-const GEO_KEY = process.env.GEO_API_KEY || 'sk-demo-2f9a41c07be34d18';\n+const GEO_KEY = process.env.GEO_API_KEY;\n+if (!GEO_KEY) throw new Error('GEO_API_KEY is required');\n",
+      "rationale": "Third-party API key falls back to a hardcoded literal in tracked source"
+    },
+    {
+      "id": "P3",
+      "sourceIssueId": "I3",
+      "file": "src/routes.js",
+      "diff": "--- a/src/routes.js\n+++ b/src/routes.js\n@@\n-export function postProfile(req, res) {\n-  logRequest(req);\n-  const profile = req.body;\n-  saveProfile(profile)\n+const WRITABLE_FIELDS = ['name', 'email', 'age', 'postcode'];\n+\n+export function postProfile(req, res) {\n+  logRequest(req);\n+  const body = req.body && typeof req.body === 'object' ? req.body : {};\n+  const profile = {};\n+  for (const field of WRITABLE_FIELDS) {\n+    if (body[field] !== undefined) profile[field] = body[field];\n+  }\n+  saveProfile(profile)\n     .then((saved) => enrich(saved))\n     .then((saved) => res.json(saved))\n     .catch((err) => res.status(500).json({ error: err.message }));\n }\n",
+      "rationale": "Request body keys become INSERT column names - unrestricted mass assignment on POST /api/profile"
+    },
+    {
+      "id": "P4",
+      "sourceIssueId": "I4",
+      "file": "package.json",
+      "diff": "--- a/package.json\n+++ b/package.json\n@@\n-    \"test\": \"node --test test/\",\n+    \"test\": \"node --test\",\n",
+      "rationale": "npm test fails to start: `node --test test/` resolves the directory as a module under Node 24"
+    },
+    {
+      "id": "P5",
+      "sourceIssueId": "I5",
+      "file": "src/routes.js",
+      "diff": "--- a/src/db.js\n+++ b/src/db.js\n@@\n-    db.get(`SELECT * FROM profiles WHERE id = '${id}'`, (err, row) => {\n+    db.get('SELECT * FROM profiles WHERE id = ?', [id], (err, row) => {\n",
+      "rationale": "SQL injection: profile id from the URL is interpolated into a SELECT"
+    },
+    {
+      "id": "P6",
+      "sourceIssueId": "I9",
+      "file": "src/client.js",
+      "diff": "--- a/src/client.js\n+++ b/src/client.js\n@@\n-  const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);\n+  const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`, {\n+    signal: AbortSignal.timeout(3000)\n+  });\n",
+      "rationale": "Outbound geo fetch has no timeout, so a slow dependency holds request handlers open indefinitely"
+    },
+    {
+      "id": "P7",
+      "sourceIssueId": "I11",
+      "file": "src/log.js",
+      "diff": "--- a/src/log.js\n+++ b/src/log.js\n@@\n export function logRequest(req) {\n-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} body=${JSON.stringify(req.body)}`);\n+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);\n }\n",
+      "rationale": "logRequest writes the full request body to stdout on every profile write"
+    },
+    {
+      "id": "P8",
+      "sourceIssueId": "I13",
+      "file": "src/client.js",
+      "diff": "--- a/src/client.js\n+++ b/src/client.js\n@@\n export async function enrich(profile) {\n   try {\n     profile.region = await lookupRegion(profile.postcode);\n-  } catch (err) {\n-  }\n+  } catch (err) {\n+    console.error(JSON.stringify({ level: 'error', event: 'geo_lookup_failed', message: err.message }));\n+  }\n   return profile;\n }\n",
+      "rationale": "enrich() swallows every geo-lookup failure in an empty catch block"
+    },
+    {
+      "id": "P9",
+      "sourceIssueId": "I17",
+      "file": "src/db.js",
+      "diff": "--- a/src/db.js\n+++ b/src/db.js\n@@\n-export function allProfiles() {\n+export function allProfiles(limit = 100, offset = 0) {\n   return new Promise((resolve, reject) => {\n-    db.all('SELECT * FROM profiles', (err, rows) => {\n+    db.all('SELECT * FROM profiles LIMIT ? OFFSET ?', [limit, offset], (err, rows) => {\n       if (err) reject(err);\n       else resolve(rows);\n     });\n   });\n }\n",
+      "rationale": "GET /api/profiles returns the entire profiles table with no LIMIT or pagination"
+    },
+    {
+      "id": "P10",
+      "sourceIssueId": "I18",
+      "file": "src/server.js",
+      "diff": "--- a/src/server.js\n+++ b/src/server.js\n@@\n-app.listen(3000, () => console.log('listening on 3000'));\n+const PORT = Number(process.env.PORT) || 3000;\n+app.listen(PORT, () => console.log(`listening on ${PORT}`));\n",
+      "rationale": "Listen port and sqlite database path are hardcoded with no environment override"
+    },
+    {
+      "id": "P11",
+      "sourceIssueId": "I18",
+      "file": "src/server.js",
+      "diff": "--- a/src/server.js\n+++ b/src/server.js\n@@\n-app.listen(3000, () => console.log('listening on 3000'));\n+app.get('/health', (req, res) => res.json({ status: 'ok' }));\n+\n+const server = app.listen(3000, () => console.log('listening on 3000'));\n+\n+process.on('SIGTERM', () => {\n+  server.close(() => process.exit(0));\n+});\n",
+      "rationale": "No health endpoint and no SIGTERM handler on a service that listens on a port"
+    }
+  ],
+  "roadmap": [
+    {
+      "order": 1,
+      "issueIds": [
+        "I1"
+      ],
+      "action": "GET /api/profiles returns every stored profile record, unauthenticated",
+      "verify": "reread the cited line and confirm the quoted construct is gone"
+    },
+    {
+      "order": 2,
+      "issueIds": [
+        "I2"
+      ],
+      "action": "Third-party API key falls back to a hardcoded literal in tracked source",
+      "verify": "reread the cited line and confirm the quoted construct is gone"
+    },
+    {
+      "order": 3,
+      "issueIds": [
+        "I6"
+      ],
+      "action": "Every read route is reachable unauthenticated; GET /api/profiles dumps the whole profile table",
+      "verify": "reread the cited line and confirm the quoted construct is gone"
+    },
+    {
+      "order": 4,
+      "issueIds": [
+        "I4"
+      ],
+      "action": "npm test fails to start: `node --test test/` resolves the directory as a module under Node 24",
+      "verify": "reread the cited line and confirm the quoted construct is gone"
+    },
+    {
+      "order": 5,
+      "issueIds": [
+        "I10"
+      ],
+      "action": "Validation module exists but no handler imports it",
+      "verify": "reread the cited line and confirm the quoted construct is gone"
+    }
+  ]
+}

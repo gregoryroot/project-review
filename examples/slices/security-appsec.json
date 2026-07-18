@@ -1,0 +1,107 @@
+{
+  "slice": "security-appsec",
+  "findings": [
+    {
+      "domain": "security",
+      "title": "SQL injection: profile id from the URL is interpolated into a SELECT",
+      "severity": "high",
+      "confidence": "confirmed",
+      "standard": ["CWE-89", "ASVS-V1.2", "API8:2023"],
+      "detail": "GET /api/profile/:id passes req.params.id straight to findProfile (routes.js:7), which builds the query by template literal with the value inside single quotes (db.js:7). Nothing between the route and the query escapes or validates it - src/validate.js exports isProfileId but is never imported anywhere in src/.",
+      "impact": "An unauthenticated caller reads any row in the profiles table, and with a UNION-style payload can enumerate the whole SQLite schema and every stored profile.",
+      "evidence": [
+        { "file": "src/routes.js", "line": 7, "quote": "findProfile(req.params.id)" },
+        { "file": "src/db.js", "line": 7, "quote": "db.get(`SELECT * FROM profiles WHERE id = '${id}'`, (err, row) => {" }
+      ],
+      "patch": "--- a/src/db.js\n+++ b/src/db.js\n@@\n-    db.get(`SELECT * FROM profiles WHERE id = '${id}'`, (err, row) => {\n+    db.get('SELECT * FROM profiles WHERE id = ?', [id], (err, row) => {\n"
+    },
+    {
+      "domain": "security",
+      "title": "SQL injection and mass assignment: request body keys become column names in an INSERT",
+      "severity": "high",
+      "confidence": "confirmed",
+      "standard": ["CWE-89", "CWE-20", "ASVS-V1.2"],
+      "detail": "postProfile assigns req.body directly to profile (routes.js:14) and hands it to saveProfile, which derives the column list from Object.keys and the value list from Object.values, quoting values by string concatenation (db.js:16-18). Identifier positions cannot be fixed by parameter binding at all, so the fix is an explicit allowlist of columns, not just placeholders.",
+      "impact": "An unauthenticated caller controls the text of an executed INSERT and the set of columns written. Beyond injection, this is mass assignment: any column the schema has can be set by adding a key to the JSON body.",
+      "evidence": [
+        { "file": "src/routes.js", "line": 14, "quote": "const profile = req.body;" },
+        { "file": "src/db.js", "line": 16, "quote": "const cols = Object.keys(profile).join(', ');" },
+        { "file": "src/db.js", "line": 17, "quote": "const vals = Object.values(profile).map((v) => `'${v}'`).join(', ');" }
+      ]
+    },
+    {
+      "domain": "security",
+      "title": "Third-party API key falls back to a hardcoded literal in tracked source",
+      "severity": "high",
+      "confidence": "confirmed",
+      "standard": ["CWE-798", "ASVS-V13"],
+      "detail": "GEO_API_KEY has a fail-open fallback to the committed literal. When the environment variable is unset the service does not fail - it silently authenticates with the key baked into the repository. The literal is present in git history from the initial import, so deleting the line does not revoke it.",
+      "impact": "Anyone with read access to the repo, or to any clone or fork of it, holds whatever the key authorizes. Because it is in history, remediation requires rotating the credential at the provider. The fallback also hides misconfiguration: a deploy missing the env var looks healthy.",
+      "evidence": [
+        { "file": "src/client.js", "line": 3, "quote": "const GEO_KEY = process.env.GEO_API_KEY || 'sk-demo-2f9a41c07be34d18';" }
+      ],
+      "repro": "$ git log -S 'sk-demo-2f9a41c07be34d18' --oneline -- examples/demo-repo\n4204f28 Scaffold repo, doctrine, demo fixture, and grounding gate",
+      "patch": "--- a/src/client.js\n+++ b/src/client.js\n@@\n-const GEO_KEY = process.env.GEO_API_KEY || 'sk-demo-2f9a41c07be34d18';\n+const GEO_KEY = process.env.GEO_API_KEY;\n+if (!GEO_KEY) throw new Error('GEO_API_KEY is required');\n"
+    },
+    {
+      "domain": "security",
+      "title": "API key sent in a query string over plaintext http://",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["CWE-319", "ASVS-V12"],
+      "detail": "BASE is a plaintext http:// origin and lookupRegion appends the credential as a query parameter. The request carries the key in cleartext, and it is in the URL rather than a header.",
+      "impact": "Any network position between the service and the provider reads the key off the wire. Credentials in a query string are recorded where a header is not - proxy access logs, the provider's own request logs, and Referer headers on any redirect - so the key leaks into systems nobody thinks to scrub. Also carries the caller's postcode in the clear.",
+      "evidence": [
+        { "file": "src/client.js", "line": 5, "quote": "const BASE = 'http://geo.example.com/v1';" },
+        { "file": "src/client.js", "line": 8, "quote": "const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);" }
+      ]
+    },
+    {
+      "domain": "security",
+      "title": "Validation module exists but no handler imports it",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["CWE-20", "ASVS-V2"],
+      "detail": "src/validate.js exports isProfileId (a check that would have blocked the id injection), isPostcode, and normalizeProfile. No route, no db function, and no client function imports any of them. getProfile passes req.params.id unchecked, postProfile passes req.body unchecked, and lookupRegion passes profile.postcode unchecked.",
+      "impact": "The team wrote exactly the constraints that would have contained the two injection findings above and never wired them in, so the code reads as validated to a reviewer skimming the file list while every handler is unguarded. The fix is small and already written.",
+      "evidence": [
+        { "file": "src/validate.js", "line": 5, "quote": "export function isProfileId(value) {" },
+        { "file": "src/routes.js", "line": 7, "quote": "findProfile(req.params.id)" },
+        { "file": "src/client.js", "line": 15, "quote": "profile.region = await lookupRegion(profile.postcode);" }
+      ],
+      "repro": "$ grep -rn \"validate\" examples/demo-repo/src/\n(no output)"
+    },
+    {
+      "domain": "security",
+      "title": "Driver error text returned verbatim to the caller in 500 responses",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["CWE-209", "API8:2023"],
+      "detail": "Both getProfile and postProfile catch rejections from the db layer and echo err.message into the JSON response body. The rejections originate from sqlite3, so the caller receives the driver's own text - which for a malformed statement includes the SQL fragment and the column or table name that failed.",
+      "impact": "Turns the injection points above into a much faster attack: an attacker probing the id route gets parse errors back in the response body, revealing the schema and confirming payload syntax without blind-injection guesswork.",
+      "evidence": [
+        { "file": "src/routes.js", "line": 9, "quote": ".catch((err) => res.status(500).json({ error: err.message }));" }
+      ]
+    },
+    {
+      "domain": "security",
+      "title": "Postcode interpolated into the outbound URL without encoding",
+      "severity": "low",
+      "confidence": "confirmed",
+      "standard": ["CWE-20", "ASVS-V12"],
+      "detail": "lookupRegion builds the request URL with no encodeURIComponent. postcode arrives from req.body unvalidated (isPostcode is never called). A body value of \"30301&key=attacker\" appends an extra query parameter ahead of the real key.",
+      "impact": "A caller shapes the outbound request's query string. The host is a fixed literal so this is not SSRF, and last-wins parameter handling limits the effect at most providers - hence low - but it lets a caller override or append parameters on a credentialed third-party call.",
+      "evidence": [
+        { "file": "src/client.js", "line": 8, "quote": "const res = await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);" }
+      ]
+    }
+  ],
+  "tests": [],
+  "assumptions": [
+    "node_modules/ is not installed and there is no lockfile, so no runtime exploitation was executed. Every injection finding was traced by reading source, not by sending a request.",
+    "Could not determine whether the geo key literal is live; the host is an RFC 2606 example domain, which suggests fixture data. The fail-open fallback pattern is the defect regardless.",
+    "express.json() applies express's default 100kb body cap, so no unbounded-body finding is reported.",
+    "log.js logs the full request body. That is privacy-data's slice, not reported here.",
+    "Authorization was not assessed: none of the three routes has auth middleware, but that is security-authz-identity's slice."
+  ]
+}

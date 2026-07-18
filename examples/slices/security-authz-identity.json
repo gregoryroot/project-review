@@ -1,0 +1,54 @@
+{
+  "slice": "security-authz-identity",
+  "findings": [
+    {
+      "domain": "security",
+      "title": "Every read route is reachable unauthenticated; GET /api/profiles dumps the whole profile table",
+      "severity": "high",
+      "confidence": "confirmed",
+      "standard": ["CWE-306", "API1:2023", "ASVS-V8"],
+      "detail": "src/server.js registers three routes and applies exactly one piece of middleware, express.json(). There is no auth middleware, no session lookup, and no per-route guard. getProfile takes req.params.id straight to findProfile() and returns the row; identity is never read from the request and never compared against any owner field, because no identity exists anywhere in the codebase. listProfiles returns allProfiles() with no filter at all.",
+      "impact": "Any anonymous caller who can reach the port can read any individual profile by enumerating its id, or skip enumeration entirely and retrieve every stored profile with a single unauthenticated request.",
+      "evidence": [
+        { "file": "src/server.js", "line": 5, "quote": "app.use(express.json());" },
+        { "file": "src/server.js", "line": 9, "quote": "app.get('/api/profiles', listProfiles);" },
+        { "file": "src/routes.js", "line": 22, "quote": "allProfiles().then((rows) => res.json(rows));" }
+      ]
+    },
+    {
+      "domain": "security",
+      "title": "POST /api/profile writes to the profile store with no authentication",
+      "severity": "high",
+      "confidence": "confirmed",
+      "standard": ["CWE-306", "CWE-862", "API5:2023"],
+      "detail": "src/server.js registers postProfile as the sole handler for POST /api/profile. No guard precedes it and none is installed globally - the only app.use() in the file is express.json(). postProfile reads req.body into a local and hands it directly to saveProfile(), which performs an INSERT. Nothing between the socket and the write establishes or checks a caller identity.",
+      "impact": "An anonymous caller can insert arbitrary rows into the profiles table with no rate limit or ownership constraint, polluting the data other users read back, and driving unbounded growth of the database file.",
+      "evidence": [
+        { "file": "src/server.js", "line": 8, "quote": "app.post('/api/profile', postProfile);" },
+        { "file": "src/routes.js", "line": 15, "quote": "saveProfile(profile)" }
+      ]
+    },
+    {
+      "domain": "security",
+      "title": "Request body keys become INSERT column names - unrestricted mass assignment on POST /api/profile",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["CWE-639", "API3:2023"],
+      "detail": "postProfile assigns req.body wholesale to profile with no field allowlist, and saveProfile derives the column list from Object.keys(profile). The caller therefore chooses which columns are written, not the server. Any column that exists on the profiles table - including the primary key id, or any role/verified flag column - is settable directly from the request body. normalizeProfile and isProfileId exist but neither is imported by src/routes.js.",
+      "impact": "A caller can set fields the server never intended to expose for write, most importantly choosing their own id value to collide with or shadow an existing profile.",
+      "evidence": [
+        { "file": "src/routes.js", "line": 14, "quote": "const profile = req.body;" },
+        { "file": "src/db.js", "line": 16, "quote": "const cols = Object.keys(profile).join(', ');" },
+        { "file": "src/validate.js", "line": 9, "quote": "export function normalizeProfile(profile) {" }
+      ],
+      "patch": "--- a/src/routes.js\n+++ b/src/routes.js\n@@\n-export function postProfile(req, res) {\n-  logRequest(req);\n-  const profile = req.body;\n-  saveProfile(profile)\n+const WRITABLE_FIELDS = ['name', 'email', 'age', 'postcode'];\n+\n+export function postProfile(req, res) {\n+  logRequest(req);\n+  const body = req.body && typeof req.body === 'object' ? req.body : {};\n+  const profile = {};\n+  for (const field of WRITABLE_FIELDS) {\n+    if (body[field] !== undefined) profile[field] = body[field];\n+  }\n+  saveProfile(profile)\n     .then((saved) => enrich(saved))\n     .then((saved) => res.json(saved))\n     .catch((err) => res.status(500).json({ error: err.message }));\n }\n"
+    }
+  ],
+  "tests": [],
+  "assumptions": [
+    "node_modules/ is not installed, so nothing was executed; all three findings were established by reading src/server.js and src/routes.js end to end rather than by sending a request.",
+    "The exact column set of the profiles table could not be confirmed - no schema or migration file exists - so the mass-assignment finding names id as the concrete settable column and does not assert that a role or admin column exists.",
+    "Out of slice, handed to security-appsec: the two unparameterized queries in src/db.js, the committed credential fallback and plaintext base URL in src/client.js. The empty catch in client.js belongs to performance-observability; the request-body logging in src/log.js to privacy-data.",
+    "No cookies, sessions, or tokens are set or read anywhere in the repo, so no CSRF, session-management (ASVS V7), or token-verification (ASVS V9) finding is reported - those controls are absent because the auth model itself is absent, which findings 1 and 2 already cover."
+  ]
+}

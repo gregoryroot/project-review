@@ -263,18 +263,28 @@ test('the same slice twice does not inflate corroboration', () => {
   assert.equal(clusters[0].corroboration, 1);
 });
 
-test('findings far apart in one file stay separate', () => {
+test('an adjacent line (+/-1) still clusters', () => {
   const a = { ...finding(), slice: 'security-appsec' };
   const b = {
-    ...finding({ evidence: [{ file: 'src/client.js', line: 4, quote: 'SELECT * FROM t WHERE id' }] }),
-    slice: 'security-appsec',
-  };
-  // lines 2 and 4 land in bucket 0 -> same cluster; check a genuinely distant one
-  const c = {
-    ...finding({ evidence: [{ file: 'src/other.js', line: 40, quote: 'x' }] }),
-    slice: 'security-appsec',
+    ...finding({ evidence: [{ file: 'src/client.js', line: 3, quote: 'export function go' }] }),
+    slice: 'privacy-data',
   };
   assert.equal(clusterFindings([a, b]).length, 1);
+});
+
+test('distinct defects a few lines apart in one file stay separate', () => {
+  // The regression that motivated exact-line clustering: a hardcoded credential,
+  // a plaintext URL, and a missing timeout within six lines of one small module
+  // are three defects, not one.
+  const cred = { ...finding({ evidence: [{ file: 'src/client.js', line: 2, quote: 'process.env.API_KEY' }] }), slice: 'security-appsec' };
+  const url = { ...finding({ evidence: [{ file: 'src/client.js', line: 4, quote: 'db.get' }] }), slice: 'security-appsec' };
+  const clusters = clusterFindings([cred, url]);
+  assert.equal(clusters.length, 2, 'two lines apart is two defects, not one');
+});
+
+test('a finding in another file never clusters', () => {
+  const a = { ...finding(), slice: 'security-appsec' };
+  const c = { ...finding({ evidence: [{ file: 'src/other.js', line: 2, quote: 'x' }] }), slice: 'security-appsec' };
   assert.equal(clusterFindings([a, c]).length, 2);
 });
 

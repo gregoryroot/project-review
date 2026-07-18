@@ -1,0 +1,68 @@
+{
+  "slice": "privacy-data",
+  "findings": [
+    {
+      "domain": "privacy",
+      "title": "GET /api/profiles returns every stored profile record, unauthenticated",
+      "severity": "high",
+      "confidence": "confirmed",
+      "standard": ["CWE-200", "API3:2023", "ASVS-V14"],
+      "detail": "listProfiles calls allProfiles(), which runs an unfiltered SELECT, and serialises the full result set straight to the response with no field allowlist and no caller scoping. The route is mounted with no auth middleware. The profile records carry email, age and postcode, so a single unauthenticated request returns the entire user base's contact and location data. This overlaps security-authz-identity's function-level check; the finding here is the bulk data exposure itself.",
+      "impact": "Anyone who can reach the service can export every user's email, age and postcode in one request. Nothing in the response path limits which columns leave - a column added to the profiles table later is exposed automatically.",
+      "evidence": [
+        { "file": "src/routes.js", "line": 22, "quote": "allProfiles().then((rows) => res.json(rows));" },
+        { "file": "src/db.js", "line": 27, "quote": "db.all('SELECT * FROM profiles', (err, rows) => {" },
+        { "file": "src/server.js", "line": 9, "quote": "app.get('/api/profiles', listProfiles);" }
+      ]
+    },
+    {
+      "domain": "privacy",
+      "title": "logRequest writes the full request body to stdout on every profile write",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["CWE-532", "ASVS-V16"],
+      "detail": "src/log.js interpolates JSON.stringify(req.body) into a console.log line. postProfile calls logRequest(req) before saving, so the complete submitted profile - email, age, postcode, and any other field the client sends - is emitted verbatim to stdout for every write. There is no redaction or field allowlist anywhere in the log path.",
+      "impact": "Personal data is duplicated from the database into the process log stream, which typically has wider read access and longer retention than the database file, and is outside any deletion the application performs. Deleting a user's row would not remove these copies.",
+      "evidence": [
+        { "file": "src/log.js", "line": 2, "quote": "body=${JSON.stringify(req.body)}" },
+        { "file": "src/routes.js", "line": 13, "quote": "logRequest(req);" }
+      ],
+      "patch": "--- a/src/log.js\n+++ b/src/log.js\n@@\n export function logRequest(req) {\n-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} body=${JSON.stringify(req.body)}`);\n+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);\n }\n"
+    },
+    {
+      "domain": "privacy",
+      "title": "User postcode is sent to a third-party geo API over cleartext HTTP",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "standard": ["CWE-200", "ASVS-V14"],
+      "detail": "enrich() passes profile.postcode into lookupRegion, which builds a URL against a plaintext http:// base and places the postcode in the query string. postProfile calls enrich(saved) for every profile written, so each write ships a user's postcode to an external party in the clear. The postcode also lands in that third party's access logs by virtue of being a query parameter rather than a request body.",
+      "impact": "Any network observer between the service and the provider sees each user's postcode, correlated with the request timing of their signup. The egress happens unconditionally on every write with no opt-out, and the postcode is retained in the third party's URL logs outside this system's control.",
+      "evidence": [
+        { "file": "src/client.js", "line": 5, "quote": "const BASE = 'http://geo.example.com/v1';" },
+        { "file": "src/client.js", "line": 8, "quote": "await fetch(`${BASE}/region?postcode=${postcode}&key=${GEO_KEY}`);" },
+        { "file": "src/routes.js", "line": 16, "quote": ".then((saved) => enrich(saved))" }
+      ]
+    },
+    {
+      "domain": "privacy",
+      "title": "No deletion path exists for stored profiles",
+      "severity": "low",
+      "confidence": "confirmed",
+      "standard": ["ASVS-V14"],
+      "detail": "The data layer exports exactly three functions - findProfile, saveProfile, allProfiles - none of which removes a row. The route table registers only two GETs and one POST; there is no DELETE verb and no handler that reaches a removal. A case-insensitive grep for delete|erase|purge|remove across the whole directory returned no matches. The cascade problem compounds it: even if a row were removed, the copies made by logRequest and by the geo egress would persist independently.",
+      "impact": "A user's profile, once written, cannot be removed by any code path in this service. Operators would have to reach the database file by hand, and would still leave the log-stream and third-party copies behind.",
+      "evidence": [
+        { "file": "src/db.js", "line": 25, "quote": "export function allProfiles() {" },
+        { "file": "src/server.js", "line": 8, "quote": "app.post('/api/profile', postProfile);" }
+      ],
+      "repro": "$ rg -i 'delete|erase|purge|remove' examples/demo-repo\nNo matches found"
+    }
+  ],
+  "tests": [],
+  "assumptions": [
+    "The personal-data inventory is inferred from code rather than from a schema: there is no CREATE TABLE anywhere in the repo, and saveProfile builds its column list dynamically, so the actual table shape is whatever a client last posted. Email, age and postcode are the fields the code demonstrably handles; there may be more.",
+    "Did not execute the service or observe a real log line or outbound request - node_modules/ is absent and no install was run. All findings are traced statically from source.",
+    "No retention configuration, log shipping target, or backup mechanism is present in the repo, so where the console.log stream ends up and how long it is kept could not be determined; the impact statement assumes typical stdout collection.",
+    "The geo API host is a placeholder domain; whether a real third party would receive this data in a deployed version of this fixture is unknowable from source."
+  ]
+}

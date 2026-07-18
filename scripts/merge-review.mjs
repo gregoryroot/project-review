@@ -343,25 +343,40 @@ function anchorOf(f) {
   return { file: toPosix(ev.file), line: Number(ev.line) || 0 };
 }
 
+/**
+ * Cluster on the exact anchor line, with a +/-1 tolerance.
+ *
+ * Keyed on the anchor because that is the one field the gate already verified;
+ * title-keying fails, since several slices write several titles for one leaked
+ * key.
+ *
+ * The tolerance is 1 line and not a wider bucket, which was the original
+ * design. A wider window over-merges: in a 19-line client module, a hardcoded
+ * credential at :3, a plaintext base URL at :5, and a missing fetch timeout at
+ * :8 are three unrelated defects, and folding them into one issue produces a
+ * composite that is wrong as stated — it inherits the worst severity and the
+ * union of citations, so a reader sees a credential finding tagged CWE-770.
+ *
+ * Under-merging is the safer failure. Two entries for one defect is untidy;
+ * one entry misdescribing three defects is a correctness bug, and it discredits
+ * the report exactly the way an invented finding would.
+ */
 export function clusterFindings(findings) {
-  const buckets = new Map(); // "file::bucket" -> cluster
+  const byLine = new Map(); // "file::line" -> cluster
   const clusters = [];
 
   for (const f of findings) {
     const { file, line } = anchorOf(f);
-    const b = Math.floor(line / 5);
     let target = null;
-    for (const nb of [b, b - 1, b + 1]) {
-      const hit = buckets.get(`${file}::${nb}`);
+    for (const nb of [line, line - 1, line + 1]) {
+      const hit = byLine.get(`${file}::${nb}`);
       if (hit) { target = hit; break; }
     }
     if (!target) {
       target = { anchor: { file, line }, members: [] };
       clusters.push(target);
-      buckets.set(`${file}::${b}`, target);
-    } else {
-      buckets.set(`${file}::${b}`, target);
     }
+    byLine.set(`${file}::${line}`, target);
     target.members.push(f);
   }
 
