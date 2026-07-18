@@ -1,6 +1,6 @@
 ---
 name: project-review
-description: Comprehensive, grounded production-readiness review of a whole repo. Four read-only reviewers run in parallel over disjoint slices, a deterministic script verifies every finding's quote against source, and the output is ten sections of JSON plus a remediation plan. Use when asked to review a project, audit a codebase, assess production readiness, or find security, privacy, test, performance, maintainability, or infrastructure problems across a repo rather than in a single diff.
+description: Comprehensive, grounded production-readiness review of a whole repo. Six read-only reviewers run in parallel over disjoint slices - plus accessibility and AI/LLM slices when the repo warrants them - hunting against CWE Top 25, OWASP ASVS, the OWASP API and LLM Top 10s, OpenSSF Scorecard and WCAG 2.2. A deterministic script verifies every finding's quote against source and discards what it cannot confirm. Output is eleven sections of JSON plus a remediation plan. Use when asked to review a project, audit a codebase, assess production readiness, or find security, privacy, test, accessibility, performance, maintainability, or infrastructure problems across a repo rather than in a single diff.
 ---
 
 # Project review
@@ -61,17 +61,38 @@ decided X is fine" stops looking at X, including at the bug that appeared next
 to X last week. Suppression is the merge script's job, applied *after* a finding
 has been independently made and grounded.
 
-## Step 3 — fan out to four reviewers
+## Step 2b — decide the conditional slices
 
-Spawn all four **in parallel, in a single message** — they are independent, and
-serializing them quadruples the wall-clock time for no benefit.
+Six reviewers always run. Two more run only when the repo has the markers for
+them, because a slice with nothing to review either returns empty (wasted) or
+reaches for something to say (worse).
+
+**`accessibility`** — spawn when the repo has a user interface:
+`.jsx/.tsx/.vue/.svelte/.astro`, `.html` templates (Jinja, ERB, Blade, Handlebars),
+a `components/` tree, or a UI framework in the manifest (React, Vue, Svelte,
+Angular, SwiftUI, Compose).
+
+**`ai-llm`** — spawn when the repo talks to a model: an SDK in the manifest
+(`@anthropic-ai/sdk`, `openai`, `google-genai`, `langchain`, `llamaindex`,
+`transformers`, `ollama`), a call to a model HTTP endpoint, a vector store
+client, or files that assemble prompts.
+
+Record which conditional slices you spawned and why in `summary`. A reader
+needs to know accessibility was *not assessed* rather than *assessed and clean*
+— those are very different reports, and conflating them is exactly the kind of
+false reassurance this tool is built to avoid.
+
+## Step 3 — fan out to the reviewers
+
+Spawn them all **in parallel, in a single message** — they are independent, and
+serializing them multiplies wall-clock time for no benefit.
 
 Each is a built-in `Explore` subagent. `Explore` is harness-restricted to
 everything-except-Edit/Write, which makes read-onlyness **mechanical rather than
 honor-system** — a custom agent's read-onlyness is one frontmatter edit away
 from silently dying.
 
-**Spawn every reviewer with `model: "opus"`.** This is not a default to leave to
+**Spawn every reviewer with `model: "opus"`, including the conditional ones.** This is not a default to leave to
 chance. The whole value proposition is precision under a doctrine that tells the
 agent to return nothing when it has nothing — resisting the pull to pad a clean
 slice, copying a quote verbatim instead of paraphrasing it, tracing a parameter
@@ -84,8 +105,9 @@ bounded cost; a discredited report is not.
 
 Give each the same prompt skeleton, varying only the doctrine file:
 
-> Read these three files in full before anything else:
+> Read these four files in full before anything else:
 > - `<skill-dir>/reference/grounding-rules.md`
+> - `<skill-dir>/reference/standards.md`
 > - `<skill-dir>/reference/output-schema.md`
 > - `<skill-dir>/reviewers/<slice>.md`
 >
@@ -99,14 +121,23 @@ Give each the same prompt skeleton, varying only the doctrine file:
 > `reference/output-schema.md` specifies. No prose before or after it. An empty
 > `findings` array is a good answer on a clean slice — do not pad.
 
-The four slices and their doctrine files:
+The slices, their doctrine files, and their standards checklists:
 
-| Reviewer | Doctrine | Owns | Runs |
+| Reviewer | Owns | Hunts against | Runs |
 |---|---|---|---|
-| `security-privacy` | `reviewers/security-privacy.md` | `security[]`, `privacy[]` | secret greps, `gitleaks` if present, `git log -S` |
-| `tests-correctness` | `reviewers/tests-correctness.md` | `tests[]` | **sole runner of the suite**, plus typecheck |
-| `performance-maintainability` | `reviewers/performance-maintainability.md` | `performance[]`, `maintainability[]` | lint only — never the suite |
-| `infra-supplychain` | `reviewers/infra-supplychain.md` | `infra[]` | dependency audit, CI config, env inventory |
+| `security-appsec` | `security[]` | CWE Top 25 injection/traversal/upload; ASVS V1–V5, V11–V13, V15 | secret greps, `gitleaks` if present, `git log -S` |
+| `security-authz-identity` | `security[]` | CWE-862/863/284/306/639; API1/API3/API5; ASVS V6–V10 | route enumeration |
+| `privacy-data` | `privacy[]` | CWE-200/532; ASVS V14, V16 | egress and log tracing |
+| `tests-correctness` | `tests[]` | — | **sole runner of the suite**, plus typecheck |
+| `performance-observability` | `performance[]`, `maintainability[]` | CWE-770; SRE four golden signals | lint only — never the suite |
+| `infra-supplychain` | `infra[]` | OpenSSF Scorecard; SLSA; NIST SSDF | dependency audit, CI config, env inventory |
+| `accessibility` *(conditional)* | `accessibility[]` | WCAG 2.2 Level AA | static markup review |
+| `ai-llm` *(conditional)* | `security[]`, `privacy[]` | OWASP LLM Top 10 (2025) | prompt and tool tracing |
+
+Security is two reviewers, not one, because authorization is the largest real
+category in both the CWE Top 25 (five entries) and the API Top 10 (three), and
+folded into a general security slice it reliably gets one bullet. Splitting it
+is the single highest-value change to the roster.
 
 Only `tests-correctness` runs the suite. Two agents running it concurrently
 produces interleaved output and doubled side effects.
@@ -143,6 +174,10 @@ node <skill-dir>/scripts/merge-review.mjs \
   --after <out>/after.txt
 ```
 
+The script emits **eleven** keys — the ten in the original contract plus
+`accessibility[]`, which is a key rather than a fold into `maintainability[]`
+because WCAG findings carry regulatory weight.
+
 Write your cross-domain summary prose to `<out>/summary.txt` first; the script
 appends the machine-generated accounting (accepted/rejected counts, suppression
 count, integrity result, assumptions) to it.
@@ -169,6 +204,13 @@ Open `review-debug.json`.
 Then spot-check: pick **5 accepted findings at random**, open each `file:line`,
 and confirm the quote is really there. Any miss is a merge-gate bug and must be
 surfaced, not quietly dropped.
+
+Also check `_standardsFreshness`. If it carries a `note`, one of the standards
+in `reference/standards.md` is past the point where a new edition was expected.
+**Report it to the user as a maintenance note about this skill — never as a
+finding about their repo.** They can run `node scripts/check-standards.mjs` to
+see what actually changed. Citations in this report are accurate as of the dates
+in that file; do not describe the review as verifying current compliance.
 
 ## Step 7 — render the report
 

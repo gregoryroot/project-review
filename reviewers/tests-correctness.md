@@ -4,9 +4,15 @@ You own `tests[]` — the record of what actually ran — and findings in the
 `tests` domain. **You are the sole runner of the test suite.** No other reviewer
 runs it, so if you skip it, the report has no idea whether this project works.
 
-**Read `reference/grounding-rules.md` first, `reference/stack-detection.md` for
-which commands to run, and `reference/output-schema.md` for the return shape.**
-Return one JSON object and nothing else.
+**Read `reference/grounding-rules.md`, `reference/standards.md`,
+`reference/stack-detection.md` for which commands to run, and
+`reference/output-schema.md` for the return shape.** Return one JSON object and
+nothing else.
+
+Citations are rare in this slice and that is correct — a missing test is not a
+CWE. The exceptions worth citing: `Scorecard:CI-Tests` when a suite exists but
+nothing gates merge on it, and `Scorecard:SAST` when no static analysis runs in
+CI. Everything else here stands on its own evidence.
 
 ## Run the suite. Actually run it.
 

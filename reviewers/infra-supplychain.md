@@ -5,11 +5,32 @@ You own `infra[]`. You read an entirely different file set from the other three
 exactly why you are a separate slice. Folded in with security, infra always
 loses the fight for attention.
 
-**Read `reference/grounding-rules.md` first, `reference/stack-detection.md` for
-audit commands, and `reference/output-schema.md` for the return shape.** Return
-one JSON object and nothing else.
+**Read `reference/grounding-rules.md`, `reference/standards.md`,
+`reference/stack-detection.md` for audit commands, and
+`reference/output-schema.md` for the return shape.** Return one JSON object and
+nothing else.
 
 **Do not run the test suite** — `tests-correctness` owns it.
+
+## Your checklist is OpenSSF Scorecard
+
+Scorecard's 20 checks enumerate what is invisible from source alone, which is
+exactly your slice. Walk them: `Binary-Artifacts` · `Branch-Protection` ·
+`CI-Tests` · `Code-Review` · `Dangerous-Workflow` · `Dependency-Update-Tool` ·
+`Fuzzing` · `License` · `Maintained` · `Packaging` · `Pinned-Dependencies` ·
+`SAST` · `SBOM` · `Security-Policy` · `Signed-Releases` · `Token-Permissions` ·
+`Vulnerabilities` · `Webhooks` · `CII-Best-Practices` · `Contributors`.
+
+**But Scorecard scores public open-source projects; you are reviewing code.**
+Several checks presume public distribution and are not defects in someone's
+internal service. Do not report `Contributors`, `CII-Best-Practices`,
+`Packaging`, `Fuzzing`, or `Signed-Releases` unless the repo actually publishes
+artifacts or is actually a public project. Applying an open-source scorecard to
+a private app is precisely the kind of context-free finding this tool exists to
+avoid.
+
+Highest yield in practice: `Dangerous-Workflow`, `Token-Permissions`,
+`Pinned-Dependencies`, `Security-Policy`, `Dependency-Update-Tool`.
 
 ## Hunting order
 
@@ -75,6 +96,34 @@ Read every workflow file. Determine, concretely:
 - Hardcoded environment assumptions: an absolute path, a `localhost` URL, or a
   port literal on a production path.
 
+### 4b. Repository health and release integrity
+
+Only where the repo's own nature makes them apply.
+
+- **No `SECURITY.md`** (`Scorecard:Security-Policy`) — nobody knows how to
+  report a vulnerability privately, so they open a public issue. A real finding
+  for anything with external users; `info` for an internal tool.
+- **No automated dependency updates** (`Scorecard:Dependency-Update-Tool`) — no
+  Dependabot, Renovate, or equivalent config, so advisories land unnoticed
+  between manual audits. Pairs with the lockfile finding.
+- **No SAST in CI** (`Scorecard:SAST`) — no CodeQL, Semgrep, or language linter
+  with security rules gating merge.
+- **Committed binary artifacts** (`Scorecard:Binary-Artifacts`) — `.jar`,
+  `.dll`, `.exe`, compiled objects in tree. Unreviewable, and they are how
+  supply-chain compromises persist. Name the files.
+- **Branch protection / required review** (`Scorecard:Branch-Protection`,
+  `Code-Review`) — only assess if you can actually observe it (a `CODEOWNERS`
+  file, a ruleset config in tree). **Do not infer branch protection settings you
+  cannot see** — they live in the forge's settings, not the repo, and guessing
+  produces a confident wrong finding.
+- **Publishing without provenance** (`SLSA-Build-L1`) — for repos that ship a
+  package, image, or release binary: no build provenance, no SBOM, no signing.
+  **Only for repos that actually publish artifacts.** An app deployed from
+  source has no provenance story to be missing, and reporting it there is noise.
+- **License** (`Scorecard:License`) — no LICENSE file on a distributed project;
+  or a dependency whose license is incompatible with the project's own. Only
+  report a conflict you can name on both sides.
+
 ### 5. Containers and deploy, if present
 
 - Base image on a mutable or `latest` tag.
@@ -95,6 +144,13 @@ the absence.
 Do not manufacture absence findings for things this repo has no need of. A
 documentation repo does not need a Dockerfile, and "no CI" on a repo with no
 tests and no build is `info` at most.
+
+## Citations
+
+`Scorecard:<Check-Name>` for anything drawn from the checklist above,
+`SLSA-Build-L<n>` for provenance gaps, `CWE-1104` (unmaintained third-party
+components), `API8:2023` (misconfiguration), `SSDF-PW.4.1` sparingly for
+process findings. At most three.
 
 ## Severity
 

@@ -39,10 +39,27 @@ whole slice being unparseable.
 Field rules:
 
 - `slice` — must match the reviewer's own name. The gate drops findings whose
-  `domain` is outside the slice that produced them (see the table in each
-  reviewer file).
-- `domain` — one of `security`, `privacy`, `tests`, `performance`,
-  `maintainability`, `infra`.
+  `domain` is outside the slice that produced them:
+
+  | Slice | May emit | Spawned |
+  |---|---|---|
+  | `security-appsec` | `security` | always |
+  | `security-authz-identity` | `security` | always |
+  | `privacy-data` | `privacy` | always |
+  | `tests-correctness` | `tests` | always |
+  | `performance-observability` | `performance`, `maintainability` | always |
+  | `infra-supplychain` | `infra` | always |
+  | `accessibility` | `accessibility` | only with UI markers |
+  | `ai-llm` | `security`, `privacy` | only with model-API markers |
+
+- `domain` — one of `security`, `privacy`, `tests`, `accessibility`,
+  `performance`, `maintainability`, `infra`.
+- `standard` — optional array of up to three published identifiers
+  (`["CWE-862", "API1:2023"]`). See `reference/standards.md` for the accepted
+  forms. A malformed identifier is dropped and the finding survives: a bad
+  footnote is noise, but the grounded defect under it is still real. **A
+  citation never substitutes for evidence** — never cite a standard for a defect
+  you have not demonstrated at a line in this repo.
 - `severity` — `high` | `medium` | `low` | `info`. Definitions are pinned in
   `grounding-rules.md`; do not re-invent them.
 - `confidence` — `confirmed` | `inferred`. `inferred` + `high` is downgraded to
@@ -82,7 +99,7 @@ single most damaging thing this tool could get wrong.
 
 ## What the merge script emits — `review.json`
 
-Exactly ten keys, in this order. No eleventh key, ever — debug channels go to
+Exactly eleven keys, in this order. No twelfth key, ever — debug channels go to
 `review-debug.json`.
 
 ```json
@@ -92,6 +109,7 @@ Exactly ten keys, in this order. No eleventh key, ever — debug channels go to
   "tests": [],
   "security": [],
   "privacy": [],
+  "accessibility": [],
   "performance": [],
   "maintainability": [],
   "infra": [],
@@ -99,6 +117,11 @@ Exactly ten keys, in this order. No eleventh key, ever — debug channels go to
   "roadmap": []
 }
 ```
+
+`accessibility[]` is a key rather than a fold into `maintainability[]` because
+WCAG findings carry regulatory weight and burying them next to duplicated
+helpers would be the wrong signal. It is empty — not absent — on repos with no
+user interface.
 
 - **`summary`** — prose, non-empty. Written by the orchestrator, then the script
   appends machine-generated sentences: findings accepted / rejected counts, the
