@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "claude-project-review",
+  "description": "Single-plugin marketplace distributing the project-review skill.",
+  "owner": {
+    "name": "gregoryroot"
+  },
+  "plugins": [
+    {
+      "name": "project-review",
+      "source": "./",
+      "description": "Grounded production-readiness review of a whole repo: parallel read-only reviewers over disjoint slices, with every finding's quote verified against source.",
+      "category": "code-quality",
+      "tags": [
+        "code-review",
+        "security",
+        "audit",
+        "production-readiness"
+      ]
+    }
+  ]
+}
