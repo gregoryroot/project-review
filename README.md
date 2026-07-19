@@ -40,7 +40,7 @@ dependencies, by design: a skill that requires installing three other things
 first mostly does not get installed.
 
 ```bash
-git clone https://github.com/<you>/claude-project-review.git ~/src/claude-project-review
+git clone https://github.com/gregoryroot/claude-project-review.git ~/src/claude-project-review
 
 # macOS / Linux
 ln -s ~/src/claude-project-review ~/.claude/skills/project-review
