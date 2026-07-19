@@ -121,7 +121,7 @@ async function probeOne(key, spec, timeoutMs) {
   try {
     const res = await fetch(spec.url, {
       signal: ctl.signal,
-      headers: { 'user-agent': 'claude-project-review/check-standards', accept: '*/*' },
+      headers: { 'user-agent': 'project-review/check-standards', accept: '*/*' },
     });
     if (!res.ok) return { key, edition: null, error: `HTTP ${res.status}` };
     const body = spec.json ? await res.json() : await res.text();

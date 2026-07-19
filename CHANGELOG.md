@@ -6,6 +6,23 @@ between versions should be able to read here why.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] — 2026-07-19
+
+### Changed
+
+- **The repository is now `gregoryroot/project-review`** (was
+  `gregoryroot/claude-project-review`). GitHub redirects the old URL, so
+  existing clones and remotes keep working.
+- **The marketplace is now named `gregoryroot`** (was
+  `claude-project-review`), so installing reads
+  `/plugin install project-review@gregoryroot` — the marketplace is the
+  catalog, the plugin is the thing installed from it, and future plugins join
+  the same catalog rather than each needing their own.
+
+  **Breaking for anyone who already added the marketplace.** Run
+  `/plugin marketplace remove claude-project-review`, then add it again under
+  the new name. The skill command `/project-review:review` is unchanged.
+
 ## [0.2.1] — 2026-07-19
 
 ### Changed

@@ -2,14 +2,14 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "project-review",
   "displayName": "Project Review",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Grounded production-readiness review of a whole repo: parallel read-only reviewers over disjoint slices, with every finding's quote verified against source.",
   "author": {
     "name": "gregoryroot",
     "url": "https://github.com/gregoryroot"
   },
-  "homepage": "https://github.com/gregoryroot/claude-project-review",
-  "repository": "https://github.com/gregoryroot/claude-project-review",
+  "homepage": "https://github.com/gregoryroot/project-review",
+  "repository": "https://github.com/gregoryroot/project-review",
   "license": "MIT",
   "keywords": [
     "code-review",

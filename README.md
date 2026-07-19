@@ -45,8 +45,8 @@ The repo serves itself as a single-plugin marketplace, so Claude Code handles
 installation and updates:
 
 ```
-/plugin marketplace add gregoryroot/claude-project-review
-/plugin install project-review@claude-project-review
+/plugin marketplace add gregoryroot/project-review
+/plugin install project-review@gregoryroot
 ```
 
 Then `/reload-plugins`, and the command is `/project-review:review` — plugin
@@ -59,18 +59,18 @@ Third-party marketplaces have auto-update off by default; turn it on under
 ### As a plain skill
 
 ```bash
-git clone https://github.com/gregoryroot/claude-project-review.git ~/src/claude-project-review
+git clone https://github.com/gregoryroot/project-review.git ~/src/project-review
 
 # macOS / Linux
-ln -s ~/src/claude-project-review ~/.claude/skills/project-review
+ln -s ~/src/project-review ~/.claude/skills/project-review
 
 # Windows (PowerShell as Administrator)
 New-Item -ItemType SymbolicLink -Path "$env:USERPROFILE\.claude\skills\project-review" `
-         -Target "$HOME\src\claude-project-review"
+         -Target "$HOME\src\project-review"
 
 # Windows without Administrator — a directory junction works identically here
 New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\project-review" `
-         -Target "$HOME\src\claude-project-review"
+         -Target "$HOME\src\project-review"
 ```
 
 Then, in any repo:
@@ -100,7 +100,7 @@ run in their own context, so their consumption is not counted here and scales
 with the number of slices spawned.
 
 Figures are Claude Code's own estimates, from `claude plugin details
-project-review@claude-project-review`, and may differ from actual usage.
+project-review@gregoryroot`, and may differ from actual usage.
 
 ## What it writes, and what it never writes
 
