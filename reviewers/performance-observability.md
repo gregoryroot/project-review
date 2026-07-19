@@ -30,8 +30,8 @@ comes from a request body, so a 10k-element payload pegs a core."
    no `LIMIT` whose result is serialized to a response. A loop over an array
    whose length comes from a request. A cache with no eviction. Always ask:
    **what is the largest this gets, and who decides?** If the answer is "a
-   build-time constant of 180 entries that no request can grow", there is no finding — put it in
-   `assumptions[]` so the next reader does not re-raise it.
+   build-time constant of 180 entries that no request can grow", there is no
+   finding — put it in `assumptions[]` so the next reader does not re-raise it.
 2. **N+1 and work inside loops.** A query, network call, or file read inside a
    `for`/`map`. Name the loop, the call inside it, and where the collection's
    size comes from.

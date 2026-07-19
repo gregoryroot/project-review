@@ -145,8 +145,9 @@ After the report is rendered and the read-only proof has passed, the skill:
 
 New **verdicts** and **false-positive fixtures** are never authored by the skill
 on its own initiative. They record a decision a human made, in this
-conversation, in words. The skill may propose one it heard ("you said that lookup table is
-fixed at build time — record that as a fixture?"); it may not infer one.
+conversation, in words. The skill may propose one it heard ("you said that
+lookup table is fixed at build time — record that as a fixture?"); it may not
+infer one.
 
 ## Global doctrine stays hand-approved
 
