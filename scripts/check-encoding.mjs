@@ -13,16 +13,21 @@
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
-// The classic UTF-8-read-as-Latin-1 signatures.
+/**
+ * The classic UTF-8-read-as-CP1252 signatures, built from code points rather
+ * than written literally — a detector that spells out the strings it hunts for
+ * flags its own source, which is how this file failed its own check the first
+ * time it ran.
+ */
 const MOJIBAKE = [
-  'Ã¢â‚¬', // em/en dash, quotes
-  'Ã©',                   // e-acute
-  'Ã¯Â»Â¿', // BOM read as ANSI
-  'â€”',             // em dash
-  'â€“',             // en dash
-  'â€™',             // right single quote
-  'Â·',                   // middle dot
-];
+  [0xe2, 0x80, 0x94], // em dash   U+2014
+  [0xe2, 0x80, 0x93], // en dash   U+2013
+  [0xe2, 0x80, 0x99], // right single quote U+2019
+  [0xe2, 0x80, 0x9c], // left double quote  U+201C
+  [0xc2, 0xb7],       // middle dot U+00B7
+  [0xc3, 0xa9],       // e-acute    U+00E9
+  [0xef, 0xbb, 0xbf], // BOM read as text
+].map((codes) => String.fromCharCode(...codes));
 
 const TEXT = /\.(md|mjs|js|json|yml|yaml|txt)$/;
 

@@ -41,6 +41,26 @@ finding it cannot confirm.** The model proposes, the script decides.
    Do this before anything else runs. It is what makes the read-only claim
    auditable rather than asserted.
 
+4. **Record the start time and print the banner.** Capture the current time as
+   an ISO 8601 string and hold it for step 9 — you need the same value at both
+   ends or the elapsed time is wrong.
+
+   ```
+   node <skill-dir>/scripts/run-timing.mjs start \
+     --memory <repo-root>/.claude/review/PROJECT-REVIEW.md \
+     --slices <count> [--deep]
+   ```
+
+   Print its output to the transcript verbatim, before spawning anything. A
+   review of a real project takes long enough that the user will walk away, and
+   they should know when to come back.
+
+   The estimate comes from this project's own prior runs in the memory's
+   `## Run history`. There is no generic model of how long a review should take
+   — a docs repo and a large app are hours apart — so **the first run on a new
+   project honestly reports "unknown" rather than inventing a number.** Do not
+   substitute a guess of your own.
+
 ## Step 1 — detect the stack
 
 Follow `reference/stack-detection.md`. Resolve the concrete commands for lint,
@@ -144,7 +164,17 @@ produces interleaved output and doubled side effects.
 
 **Reviewers cannot write files** — that is the point of using `Explore`. Take
 each agent's returned text and write it yourself to
-`<out>/slices/<slice-name>.json`, verbatim, without cleaning it up. If a
+`<out>/runs/<run-stamp>/<slice-name>.json`, verbatim, without cleaning it up,
+where `<run-stamp>` is the start time from step 0.4 with `:` and `.` replaced by
+`-`.
+
+**Use the run-scoped directory, not a shared `slices/`.** Artifacts are already
+isolated per project, because every path derives from the repo root. The
+collision this prevents is two reviews of *the same* repo at once — two windows,
+or a rerun started before the first finished. A shared slice directory lets the
+merge glob pick up the other run's output and produce a report describing two
+different moments of the codebase, which is precisely the stale-premise failure
+the whole design exists to avoid. If a
 reviewer returned prose, write the prose: the merge script is built to tolerate
 one bad slice and will report the failure explicitly. Do not "fix" a slice by
 rewriting it into JSON yourself; that would put you back in the business of
@@ -180,7 +210,7 @@ review itself**, naming the command that caused it. Do not clean it up — do no
 ```
 node <skill-dir>/scripts/merge-review.mjs \
   --repo <repo-root> \
-  --in <out>/slices \
+  --in <out>/runs/<run-stamp> \
   --out <out> \
   --memory <repo-root>/.claude/review/PROJECT-REVIEW.md \
   --summary <out>/summary.txt \
@@ -250,11 +280,35 @@ signature has to precede the patches that call it.
 want the fixes applied, they will say so, and that is a separate action with a
 separate confirmation.
 
+## Step 8b — print the end timestamp
+
+As soon as the report and remediation plan are on screen — **before** the memory
+prompt, which waits on a human and would otherwise inflate the number:
+
+```
+node <skill-dir>/scripts/run-timing.mjs end \
+  --started <the ISO timestamp from step 0.4> \
+  --memory <repo-root>/.claude/review/PROJECT-REVIEW.md [--deep]
+```
+
+Print it verbatim. It reports the finish time and the elapsed time, and notes
+when the run diverged from its estimate by 25% or more — which is the signal
+that something changed about this project, not that the clock is broken.
+
 ## Step 9 — propose the memory update, then ask
 
 Only now, after the read-only proof has passed, propose the diff to
 `<repo>/.claude/review/PROJECT-REVIEW.md`:
 
+- **A new `## Run history` line**, so the next run can predict its own duration:
+  ```
+  node <skill-dir>/scripts/run-timing.mjs entry \
+    --started <ISO from step 0.4> --sha <short sha> --slices <count> [--deep]
+  ```
+  Keep the five most recent entries and drop older ones — a duration from
+  twenty commits ago describes a different project. This line is part of the
+  same diff you show the user; it is calibration, which is exactly what the
+  memory is for.
 - New **Stack** facts learned this run (commands that worked, the non-obvious
   ones especially, and which suites CI actually gates).
 - New **Where to look** entries — entry points, PII-touching modules.

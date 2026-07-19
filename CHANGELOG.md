@@ -8,6 +8,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Run timestamps and a duration estimate.** The skill now prints when a review
+  started and when it is expected to finish, then prints the finish time and
+  elapsed duration when it completes. The estimate is the median of the last
+  three same-mode runs recorded in the project memory's new `## Run history`
+  section — `standard` and `deep` runs are tracked separately and never
+  averaged, since a run that executed a Playwright suite is not evidence about
+  one that skipped it. **With no prior run the answer is "unknown"**: there is
+  no generic model of how long a review should take, and a fabricated estimate
+  is worse than an absent one because the user plans around it.
+- `scripts/check-encoding.mjs`, in CI. Catches UTF-8-read-as-ANSI mojibake and
+  literal `\r\n` escapes in tracked text — damage that is nearly invisible in a
+  diff and lands in doctrine that both humans and models read.
+
+### Changed
+
+- **Reviewer output now lands in a per-run `runs/<timestamp>/` folder** rather
+  than a shared `slices/`. Artifacts were already isolated between projects
+  (every path derives from the repo root), but two reviews of the *same* repo at
+  once shared one slice directory, and the merge globs it — so one run could
+  merge the other's output and produce a report describing two different moments
+  of the codebase.
+
 ## [0.1.0] — 2026-07-18
 
 First working version.

@@ -21,7 +21,7 @@ stable between runs.
 
 ## Format
 
-Four sections, exactly these headings. Anything else is ignored on load.
+Five sections, exactly these headings. Anything else is ignored on load.
 
 ```markdown
 # Project review memory
@@ -46,11 +46,37 @@ Four sections, exactly these headings. Anything else is ignored on load.
 ## False-positive fixtures
 <!-- findings a human rejected as wrong; suppress permanently -->
 - 2026-07-18 · a1b2c3d · `lib/catalog.ts` · performance · "unbounded query": the array is a build-time constant of 180 entries
+
+## Run history
+<!-- how long this project's reviews actually take; DATE · SHA · DURATION · N slices · MODE -->
+- 2026-07-18 · a1b2c3d · 11m42s · 8 slices · standard
+- 2026-07-16 · 9f6c312 · 38m10s · 8 slices · deep
 ```
 
 Every entry in **Verdicts** and **False-positive fixtures** is
 `DATE · SHA · FILE · DOMAIN · TEXT`. All five fields required. An entry missing
 any of them is malformed: ignore it and list it in `_stale`.
+
+### Run history
+
+The one section that is neither calibration about the code nor a verdict: it
+records how long this project's reviews actually take, so the next run can tell
+the user when to come back.
+
+`standard` and `deep` runs are tracked separately and never averaged together —
+a run that executed a Playwright suite is not evidence about one that skipped
+it. The estimate is the **median of the last three same-mode runs**, not the
+mean, so one flaky suite or one loaded machine does not distort every future
+prediction.
+
+**Keep five entries. Drop the rest.** A duration from twenty commits ago
+describes a project that no longer exists, which is the same staleness rule the
+rest of this file lives under.
+
+**With no prior run, the answer is "unknown."** There is no generic model of how
+long a review should take — a docs repo and a large application differ by hours
+— and a fabricated estimate is worse than an absent one, because the user plans
+around it. See `scripts/run-timing.mjs`.
 
 ## Three rules that make it safe
 

@@ -20,5 +20,8 @@
 - 2026-07-18 · 9f6c312 · scripts/check-standards.mjs · infra · outbound fetch to seven fixed URLs is intended and cannot take caller input: no SSRF surface, won't fix
 - 2026-07-18 · 9f6c312 · scripts/merge-review.mjs · performance · verifyEvidence re-reads a file per evidence item with no cache: accepted, input is bounded by reviewer output and the sibling step is eight parallel Opus agents
 
+## Run history
+- 2026-07-18 · 9f6c312 · 6m20s · 6 slices · standard
+
 ## False-positive fixtures
 - 2026-07-18 · 9f6c312 · scripts/merge-review.test.mjs · security · "hardcoded credential": the API_KEY and sk-demo literals are synthetic fixtures feeding the grounding gate, not real secrets

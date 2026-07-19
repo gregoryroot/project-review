@@ -75,8 +75,9 @@ You should want this section to exist before running it.
 
 **It writes exactly two things:**
 
-- `<repo>/.claude/review/` — `review.json`, a timestamped copy, and
-  `review-debug.json`. Redirect with `--out`.
+- `<repo>/.claude/review/` — `review.json`, a timestamped copy,
+  `review-debug.json`, and a per-run `runs/<timestamp>/` folder holding each
+  reviewer's raw output. Redirect with `--out`.
 - `<repo>/.claude/review/PROJECT-REVIEW.md` — **only after showing you the diff
   and getting your approval.**
 
@@ -102,6 +103,18 @@ The read-only claim is **audited, not asserted**: the skill snapshots
 `git status --porcelain` before the review and diffs it afterward. Any tracked
 file that became dirty is reported at the top of the report as a defect *in the
 review itself*, naming the command responsible.
+
+### Running it on several projects
+
+Nothing is shared between projects. Every path derives from the repo root, so
+each project keeps its own `review.json`, its own `PROJECT-REVIEW.md`, and its
+own run history — which is why the duration estimate for a large app is not
+diluted by a docs repo. The installed skill directory is only ever read.
+
+Two reviews of *the same* repo at once are isolated too: each run writes its
+reviewers' output to its own `runs/<timestamp>/` folder, so one run's slices can
+never be merged into the other's report. The canonical `review.json` is
+last-writer-wins, and both runs' timestamped copies survive.
 
 ### One deliberate trust boundary
 

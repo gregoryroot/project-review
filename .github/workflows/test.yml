@@ -39,6 +39,9 @@ jobs:
       - name: Unit tests (supporting scripts)
         run: node --test scripts/tools.test.mjs
 
+      - name: Unit tests (run timing)
+        run: node --test scripts/run-timing.test.mjs
+
       - name: Regression — demo-repo reproduces expected-review.json
         shell: bash
         run: |
