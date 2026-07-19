@@ -13,7 +13,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -211,4 +211,18 @@ test('tracked text files are free of mojibake', () => {
   const out = execFileSync(process.execPath, [path.join(SCRIPTS, 'check-encoding.mjs')],
     { encoding: 'utf8', cwd: REPO });
   assert.match(out, /check-encoding: OK/);
+});
+
+test('the encoding checker does not flag its own documentation', () => {
+  // It has now false-positived on itself twice: once because its pattern list
+  // spelled out the sequences it hunts for, once because the CHANGELOG names
+  // the escape it looks for. A checker that cries wolf gets disabled.
+  const files = ['scripts/check-encoding.mjs', 'CHANGELOG.md', 'CONTRIBUTING.md'];
+  for (const f of files) {
+    const text = readFileSync(path.join(REPO, f), 'utf8');
+    assert.ok(text.length > 0, `${f} should be readable`);
+  }
+  const out = execFileSync(process.execPath, [path.join(SCRIPTS, 'check-encoding.mjs')],
+    { encoding: 'utf8', cwd: REPO });
+  assert.doesNotMatch(out, /check-encoding: FAILED/);
 });

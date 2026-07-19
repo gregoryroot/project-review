@@ -51,13 +51,18 @@ for (const file of files) {
       break;
     }
   }
-  if (text.includes('\\r\\n')) {
-    const idx = text.indexOf('\\r\\n');
-    const line = text.slice(0, idx).split('\n').length;
-    // A literal backslash-r-backslash-n in a text file is almost always a
-    // botched search-and-replace, not intent.
-    if (!file.endsWith('.mjs') && !file.endsWith('.js')) {
-      hits.push(`${file}:${line} contains a literal \\r\\n escape`);
+  // A literal backslash-r-backslash-n in prose is almost always a botched
+  // search-and-replace. Inside a code span or fence it is documentation — this
+  // file and the CHANGELOG both legitimately name the sequence — so strip code
+  // before looking. Source files are skipped entirely; escapes are their job.
+  if (!/\.(mjs|js|json)$/.test(file)) {
+    const prose = text
+      .replace(/```[\s\S]*?```/g, '')  // fenced blocks
+      .replace(/`[^`\n]*`/g, '');      // inline code spans
+    const idx = prose.indexOf('\\r\\n');
+    if (idx !== -1) {
+      const line = prose.slice(0, idx).split('\n').length;
+      hits.push(`${file}:~${line} contains a literal \\r\\n escape outside a code span`);
     }
   }
 }
