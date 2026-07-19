@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "project-review",
   "displayName": "Project Review",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Grounded production-readiness review of a whole repo: parallel read-only reviewers over disjoint slices, with every finding's quote verified against source.",
   "author": {
     "name": "gregoryroot",

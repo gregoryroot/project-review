@@ -39,6 +39,25 @@ degrades to a prose merge and says so loudly in the report.
 dependencies, by design: a skill that requires installing three other things
 first mostly does not get installed.
 
+### As a plugin (recommended)
+
+The repo serves itself as a single-plugin marketplace, so Claude Code handles
+installation and updates:
+
+```
+/plugin marketplace add gregoryroot/claude-project-review
+/plugin install project-review@claude-project-review
+```
+
+Then `/reload-plugins`, and the command is `/project-review:review` — plugin
+skills are namespaced by plugin name, so the bare `/project-review` below
+applies only to the clone-and-symlink route.
+
+Third-party marketplaces have auto-update off by default; turn it on under
+`/plugin` → **Marketplaces** to track releases automatically.
+
+### As a plain skill
+
 ```bash
 git clone https://github.com/gregoryroot/claude-project-review.git ~/src/claude-project-review
 
@@ -67,6 +86,21 @@ Then, in any repo:
 | `--deep` | Also run production builds and e2e suites. Off by default; slower and likelier to touch state. |
 | `--out <dir>` | Write artifacts somewhere other than `<repo>/.claude/review/` — use this to keep a review entirely out of the repo under review. |
 | `--no-memory` | Ignore any existing `PROJECT-REVIEW.md` for this run. |
+
+### Context cost
+
+| | Tokens |
+|---|---|
+| Always-on (added to every session) | ~260 |
+| On-invoke (paid each time the skill fires) | ~6.2k |
+
+The always-on cost is just the description Claude reads to decide whether the
+skill is relevant; the body loads only on invocation. Reviewer subagents each
+run in their own context, so their consumption is not counted here and scales
+with the number of slices spawned.
+
+Figures are Claude Code's own estimates, from `claude plugin details
+project-review@claude-project-review`, and may differ from actual usage.
 
 ## What it writes, and what it never writes
 

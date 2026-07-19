@@ -6,6 +6,22 @@ between versions should be able to read here why.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1] — 2026-07-19
+
+### Changed
+
+- **Marketplace installs now expose `/project-review:review`** instead of
+  `/project-review:project-review`. Plugin skills are namespaced by plugin
+  name, and the second half came from the `name` in `SKILL.md` frontmatter,
+  which matched — so the command stuttered. Frontmatter `name` is authoritative
+  only for a plugin-root `SKILL.md`; a skills-directory install still takes its
+  command from the directory name, so `/project-review` is unchanged for anyone
+  who cloned or symlinked.
+
+### Added
+
+- README documents the plugin install route and the skill's context cost.
+
 ## [0.2.0] — 2026-07-19
 
 ### Added

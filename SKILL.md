@@ -1,5 +1,5 @@
 ---
-name: project-review
+name: review
 description: Comprehensive, grounded production-readiness review of a whole repo. Six read-only reviewers run in parallel over disjoint slices - plus accessibility and AI/LLM slices when the repo warrants them - hunting against CWE Top 25, OWASP ASVS, the OWASP API and LLM Top 10s, OpenSSF Scorecard and WCAG 2.2. A deterministic script verifies every finding's quote against source and discards what it cannot confirm. Output is eleven sections of JSON plus a remediation plan. Use when asked to review a project, audit a codebase, assess production readiness, or find security, privacy, test, accessibility, performance, maintainability, or infrastructure problems across a repo rather than in a single diff.
 ---
 
