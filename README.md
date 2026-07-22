@@ -58,22 +58,37 @@ Third-party marketplaces have auto-update off by default; turn it on under
 
 ### As a plain skill
 
+#### macOS / Linux
+
 ```bash
-git clone https://github.com/gregoryroot/project-review.git ~/src/project-review
+git clone https://github.com/gregoryroot/project-review.git "$HOME/projects/project-review"
 
-# macOS / Linux
-ln -s ~/src/project-review ~/.claude/skills/project-review
+mkdir -p "$HOME/.claude/skills"
 
-# Windows (PowerShell as Administrator)
-New-Item -ItemType SymbolicLink -Path "$env:USERPROFILE\.claude\skills\project-review" `
-         -Target "$HOME\src\project-review"
-
-# Windows without Administrator — a directory junction works identically here
-New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\project-review" `
-         -Target "$HOME\src\project-review"
+ln -s "$HOME/projects/project-review" "$HOME/.claude/skills/project-review"
 ```
 
-Then, in any repo:
+#### Windows PowerShell (Administrator)
+
+```powershell
+git clone https://github.com/gregoryroot/project-review.git "$env:USERPROFILE\projects\project-review"
+
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\skills"
+
+New-Item -ItemType SymbolicLink -Path "$env:USERPROFILE\.claude\skills\project-review" -Target "$env:USERPROFILE\projects\project-review"
+```
+
+#### Windows PowerShell (No Administrator)
+
+```powershell
+git clone https://github.com/gregoryroot/project-review.git "$env:USERPROFILE\projects\project-review"
+
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\skills"
+
+New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\project-review" -Target "$env:USERPROFILE\projects\project-review"
+```
+
+Then after starting a new Claude Code session (to pick up the new skill), in any repo:
 
 ```
 /project-review
