@@ -120,11 +120,20 @@ it, and (d) not acquire the test-runner role.
 
 ## Session-specific note
 
-Session goal names a "mood tracking" mobile app. Verified: no mood/wellbeing/
+CORRECTED 2026-09-06. The previous text of this section claimed: "no mood/wellbeing/
 journal/mental-health content exists in this repo; branch
-`claude/mood-tracker-requirements-od3gtz` is 0 commits ahead of `main`. Any
-artifact presented as mood-tracker architecture must be checked against the
-repo before its claims are treated as grounded.
+`claude/mood-tracker-requirements-od3gtz` is 0 commits ahead of `main`." Both claims
+are false and are retracted.
+
+`docs/mood-tracker/PRD-v1.md` exists: 950 lines, 49,398 bytes, sha256
+a01140bd...79b5, committed at 646e00d, working tree clean. It is a v1 product
+requirements document for a local-first mood tracker (19 sections plus Appendix A).
+
+Two distinct subjects live in this repo and must not be conflated. The criteria
+above describe project-review v0.3.0, the review TOOLING. The PRD is a separate
+product design document. When the PRD is the review target, judge it as a design:
+findings are gaps or contradictions in the specified architecture, cited by verbatim
+quote and line number, not defects in shipped code.
 
 ## Anti-patterns discovered
 

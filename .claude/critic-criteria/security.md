@@ -1,8 +1,12 @@
 <!-- seeded from project scan -->
 # Security critic criteria — project-review
 
-Seeded 2026-09-06 from a scan of the repo at `claude/mood-tracker-requirements-od3gtz`
-(0 commits ahead of `main`, 0 files differing). Repo is project-review v0.3.0.
+Seeded 2026-09-06 from a scan of the repo at `claude/mood-tracker-requirements-od3gtz`.
+Repo is project-review v0.3.0. CORRECTED 2026-09-06: the original seeding said the
+branch was "0 commits ahead of `main`, 0 files differing". That was wrong. The branch
+carries `docs/mood-tracker/PRD-v1.md` (committed at 646e00d, sha256 a01140bd...79b5).
+The criteria below describe the project-review TOOLING only, which is a separate
+subject from the PRD.
 
 ## What this project actually is
 A Claude Code skill/plugin. There is **no running service, no network listener,
@@ -67,8 +71,16 @@ that presuppose a web app.
 - `fixture-not-a-finding` — `examples/demo-repo/` and `*.test.mjs` literals
   (`sk-demo-abc`, `API_KEY`, `BEGIN RSA PRIVATE KEY`) are synthetic. Reporting
   them as real vulnerabilities is itself a defect.
-- `no-invented-scope` — findings must cite this repo as it is; no mood-tracking
-  app is present, so no auth/PII/health-data findings can be grounded here.
+- `no-invented-scope` — findings must cite an artifact that actually exists and
+  quote it. Do not infer a running service, database, or auth layer for the
+  project-review tooling, which has none.
+
+RETRACTED 2026-09-06: an earlier version of `no-invented-scope` stated that "no
+mood-tracking app is present, so no auth/PII/health-data findings can be grounded
+here." That is false. `docs/mood-tracker/PRD-v1.md` is present and committed, and
+auth, PII, and health-data findings against that document ARE grounded and are in
+scope whenever it is the review target. Note the distinction: the PRD is a design
+document, so a finding is a flaw in the DESIGN, not a live vulnerability.
 
 ## Anti-patterns / known false positives
 - Hardcoded key, SQL injection, and missing auth in `examples/demo-repo/` are
