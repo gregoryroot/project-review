@@ -171,3 +171,40 @@ evidence trail the same way.
 When a generic rule would escalate and a narrower operative rule would not, state the
 reasoning in the output rather than silently applying one. A withheld escalation that is
 never explained is indistinguishable from an escalation nobody noticed was due.
+
+## C-25 — Distinguish a control that is VISIBLE from one that is AUDITABLE
+A mechanism that surfaces a count, a denominator, or an exclusion marker proves that
+something happened; it does not let a reviewer judge whether it should have. Ask what
+artifact carries the JUSTIFICATION, and whether that artifact is in the set handed to
+the checker. Counts routed without reasons produce a guarantee whose label is stronger
+than its content.
+
+## C-26 — A self-attested step needs a named party who re-runs it
+Converting an unverifiable claim into a stated one is real progress: it becomes
+falsifiable. But falsifiable is not falsified. Trace whether any downstream pass
+actually re-executes the assertion. If verification covers quotes and the new element
+is a search, a computation, or a procedure, it is outside the verifier's reach and
+should be documented as self-attested rather than counted as closed.
+
+## C-27 — A dissent channel must exist wherever a second opinion is required
+Naming a second reader, reviewer, or approver creates an obligation without creating a
+disposition. Check for a defined artifact and an ordering step that consumes the second
+opinion when it DISAGREES. Rules written for "two lots", "two teams", or "two reviewers"
+usually do not reach a disagreement inside a single unit with one accountable owner.
+
+## C-28 — A tie-break written over ranges will catch classes it never considered
+Conflict rules scoped by location ("where both reach an item, X wins") apply to every
+item in the range, including ones the rule's author was not thinking about. Enumerate
+what else lives in the winning party's range and check it against the losing party's
+definition — especially where the definition explicitly names a category as in-scope.
+
+## C-29 — Verify each member a class rule claims to cover
+When a fix generalizes an enumeration into a class, test the class predicate against
+every member the text asserts it captures. Naming a member in prose does not make it
+satisfy the test written beside it; a class stated to cover A and B often covers only A.
+
+## C-30 — In a final round, findings are documentation, not requests
+When no further fix is possible, write each residual for the eventual READER of the
+output artifact: what the control is, where its guarantee thins, and what an absent
+finding does NOT prove. The failure mode of a last cycle is an undocumented limit, so
+state explicitly that silence in a weakened area is not evidence anyone looked.
