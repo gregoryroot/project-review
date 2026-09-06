@@ -233,3 +233,25 @@ independent agents resolve it differently and silently, and the divergence is vi
 comparing their behaviour after the fact. Self-contradictory permissions do not produce
 errors; they produce inconsistent compliance. Predicting which way each agent will resolve it
 is not possible, so the check is to find the contradiction, not to model the outcome.
+
+### Deletion residue: a removed block is not a self-contained edit
+Confirmed twice, 2026-09-06, on two different artifacts. When a module, lot, section, or rule is
+retired, merged, or folded, the deletion almost never removes the references TO it. Grep for the
+retired identifier across the whole artifact rather than re-reading the region that changed; the
+dangerous residue is always outside it — a live read order pointing at a deleted block, a cross-
+reference to a folded item, a numbered list with a hole. Two verified instances: a retired lot left
+a live dependency arrow, and a folded charge required a cross-reference sweep (headings renumbered,
+every surviving pointer resolved) to confirm no orphan.
+Generalisation worth more than the check: **a fix routinely meets text the fix did not touch.** Every
+edit that changes a rule creates a second edit's worth of obligation in the rationales, summaries,
+counts, and cross-references that quoted the old rule. Rationales are the usual survivors, and a
+stale rationale is worse than a stale rule because it argues for the wrong behaviour rather than
+merely stating it. After any rule change, search for prose that explains WHY the old rule existed.
+
+### Losing a finding is worse than misattributing one
+A misattributed finding leaves a trace that can be corrected. A dropped finding leaves nothing, so
+nobody can detect the loss from the record. Any process that adjudicates findings from multiple
+sources needs an explicit completeness check — every filed item appears somewhere in the disposition,
+including as an explicit rejection — not merely an accuracy check on the items that survived.
+Corollary for the reviewer: keep your own list of what you filed, because you are the only party
+positioned to notice your finding vanished.
