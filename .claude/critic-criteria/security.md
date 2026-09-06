@@ -91,3 +91,54 @@ document, so a finding is a flaw in the DESIGN, not a live vulnerability.
 
 ## Cycle log
 (append per invocation)
+
+---
+
+## PRD / design-document review — durable criteria (added 2026-09-06)
+
+Applies whenever the review target is a DESIGN DOCUMENT rather than code, and especially a
+local-first app handling health or mental-health data. A finding here is a flaw in the DESIGN, not a
+live vulnerability. Severity language should say "if built."
+
+### Named checks
+- `clinical-vs-design-boundary` — the sorting axis is MECHANISM vs PSYCHOLOGY, not real-person vs
+  hypothetical-person. A design finding traces a mechanism: data reaches a party the design said it
+  would not; a promised control does not take effect; state persists after a transition that claims
+  to clear it. A clinical finding predicts how a person will think, feel, or respond. Real-vs-
+  hypothetical fails to sort, because a clinical generalization about a real POPULATION names no
+  individual and reads as hypothetical-user analysis. Test any safety finding with one question:
+  what mechanism does this trace? If it cannot answer, it is clinical — strike it yourself.
+- `ally-as-adversary` — any support-partner, caregiver, or sharing feature is modeled with the
+  paired party as a potential adversary, including coercion and intimate-partner abuse. Restriction
+  to coarse granularity (bands, summaries, trends) does not by itself bound disclosure: check timing,
+  cadence, absence/non-response, band-transition latency, edit and backfill visibility, and inference
+  from repeated low-entropy observations. Coarse data observed often is not coarse.
+- `revocation-expressiveness` — for every promised revocation, unpair, delete, or export control, ask
+  whether the DATA MODEL can represent it and what remains observable to a formerly-authorized party
+  after the transition. Cached, mirrored, and already-delivered data are the usual gap. A revocation
+  the model cannot express is a promise the design cannot keep.
+- `promise-vs-delivery` — trace user-facing promises to the section that delivers them. A promise
+  made in a summary, principles, or anti-goals section and delivered nowhere is the highest-severity
+  class in a design review. Anti-goals are promises when they reach a user surface.
+- `absence-claims-are-first-class` — an adequacy or completeness finding is an ABSENCE claim. Cite it
+  as `ABSENT: <element> — containing requirement: "<verbatim quote>" (L<n>) — searched <range>,
+  <search performed>`. An absence claim carries full severity; a review process that caps absence
+  findings below its top tier cannot report an underspecified safety section, which is the failure
+  mode adequacy review exists to catch.
+- `presence-is-not-adequacy` — a verdict scheme with only SPECIFIED/ABSENT lets a presence check
+  discharge an adequacy charge. Require a third value (specified-but-insufficient) and require each
+  SPECIFIED verdict to tie its quote to the named promise the element serves.
+- `stated-uncertainty-is-not-a-defect` — before filing "X is missing," search the WHOLE document, not
+  a list of ranges. Authors hedge inline. If the search was partial, write "not found in <ranges
+  searched>" — a statement about the search — never "unstated," which is a statement about the author.
+
+### Anti-patterns specific to design-document review
+- Filing an uncertainty the author already registered in an open-decisions, risks, or appendix
+  section. Check those first; it is the highest false-positive surface in any PRD.
+- Re-arguing a scoping decision the author explicitly deferred to their own knowledge. Deference to a
+  ship/defer decision does NOT exempt that feature's design from review — separate the two, and frame
+  design findings "if built."
+- Reporting a review-process metric (citation drift, coverage rate) as if it were a finding about the
+  document. The error is the reviewer's; keep it structurally separate in any report.
+- Classic OWASP web categories against a local-first design with no server. Absence of auth is not
+  automatically a finding; re-identification and unwanted disclosure are the harms that matter.
