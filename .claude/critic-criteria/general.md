@@ -122,3 +122,52 @@ A change that relocates work between owners must be reflected in whatever load o
 sequencing table drives decisions. Recompute the moved quantity. A lot described by a
 qualitative label ("document-wide") hides its own growth across revisions; insist on an
 exact count once any count is being used to make a scheduling call.
+
+---
+
+## Cycle-3 additions (2026-09-06)
+
+## C-18 — A review step that consumes only "findings" cannot audit a clean verdict
+When a checker, second reader, or approval step is fed the OUTPUT of an earlier step,
+ask what that earlier step emits when it finds nothing wrong. If a passing verdict emits
+no artifact, the downstream check never sees the passes — and a wrongly-clean verdict is
+usually the failure the second check existed to catch. Route the full result set, not the
+exception list. Tell: the upstream deliverable is a matrix, checklist, or per-unit
+verdict, while the handoff is described in terms of "findings" or "issues."
+
+## C-19 — A new rule is inert until it is wired into the step that enforces it
+A correctly written control placed in one section does not bind the validation table,
+disposition rule, or template in another. Grep the new rule's key phrase across the whole
+document: if it appears only where it was authored plus a cross-reference, the enforcing
+machinery still runs the old logic. State the wiring, not just the principle.
+
+## C-20 — Check both directions of a verdict, not just the one that failed last time
+Controls tend to be repaired asymmetrically: whichever direction produced the last
+embarrassment gets fixed. After a fix, ask what protects the OPPOSITE error. A pair where
+a false-positive path is guarded and a false-negative path is not (or vice versa) leaves
+the verdict unverified overall, even though each direction looks individually addressed.
+
+## C-21 — A fix by enumeration leaves the class unfixed
+When a defect is repaired by naming the specific items that triggered it, the general
+test above it usually still stands and still excludes structurally identical unnamed
+items. Worse, the enumeration and the test now disagree. Prefer, and ask for, a class
+rule; when reporting, name one unnamed member of the class to show the hole is real.
+
+## C-22 — A newly introduced term inherits every use of its words elsewhere
+Adding an undefined qualifier ("a stated release gate", "a named surface") imports every
+place the source document happens to use similar language, including registers and
+appendices that were never meant as commitments. Grep the target document for the phrase
+family before accepting the term, and check whether the new inclusions collide with an
+existing prohibition.
+
+## C-23 — Attribution of findings follows the same rule as attribution of commits
+A dispatch or summary that credits you with a finding you did not make is the same defect
+class as inferring authorship from history: a real artifact with a wrong pointer on it.
+Correct it in the output, sourced to your own prior report, even when the misattribution
+is flattering or harmless — an unowned finding propagating into the record corrupts the
+evidence trail the same way.
+
+## C-24 — Record why you did NOT escalate
+When a generic rule would escalate and a narrower operative rule would not, state the
+reasoning in the output rather than silently applying one. A withheld escalation that is
+never explained is indistinguishable from an escalation nobody noticed was due.
