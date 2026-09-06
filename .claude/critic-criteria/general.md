@@ -79,3 +79,46 @@ which promise is unbacked and where; do not speculate about any real person.
 findings. The project-review skill itself (`SKILL.md`, `scripts/`, `reviewers/`,
 `reference/`) is a separate subject. Relocation of the PRD to its own repository is
 an open user decision — never assume it, recommend it as settled, or act on it.
+
+---
+
+## Cycle-2 additions (2026-09-06)
+
+## C-12 — A fix that supplies a missing definition can narrow past the cases it protected
+When a vague threshold is repaired by binding it to a newly written definition, re-test
+the definition against the items the threshold existed to catch. Tightening is not free:
+a definition requiring a claim to reach an end user will silently exclude obligations the
+document places on the BUILDER, which are often the safety-critical ones. Check the
+excluded set explicitly, not the included set.
+
+## C-13 — When a global permission and a per-item enumeration conflict, behaviour settles it
+A document may say "any lot may read any line" while every lot also lists a narrower
+"may read." Do not report this only as ambiguity. Look for whether the author later
+granted an explicit exception to one item. A grant is evidence that the enumeration
+binds and the global permission is inert — that resolves which reading is operative and
+converts a soft inconsistency into a hard scope defect.
+
+## C-14 — Verify both halves of a two-part seam separately
+A seam described as "A originates outside B's scope AND its fulfilment lies outside A's
+reach" has two independent closures. A revision commonly closes the cheaper half and
+reports the seam as fixed. Re-run the ORIGINAL worked trace item by item against the
+revision rather than reading the changelog entry.
+
+## C-15 — A role can survive in name and lose its reach
+When checking whether an assignment survived a revision, check its scope grants, not
+only its title. An accountability that is preserved verbatim while the resources needed
+to discharge it are left unextended is worse than a deleted one, because the org chart
+shows the question as covered.
+
+## C-16 — Credit the closes explicitly and by re-running the example
+Report which prior findings closed and on what evidence, in the same output as the
+open ones. Re-running your own earlier worked example against the revision, and stating
+the severity it now yields, is the only claim of closure that can be checked. It also
+keeps a downgrade honest: a defect that shrank from MAJOR to MINOR should be said to
+have shrunk, not re-filed at full weight.
+
+## C-17 — Accounting drifts when scope moves
+A change that relocates work between owners must be reflected in whatever load or
+sequencing table drives decisions. Recompute the moved quantity. A lot described by a
+qualitative label ("document-wide") hides its own growth across revisions; insist on an
+exact count once any count is being used to make a scheduling call.
