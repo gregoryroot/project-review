@@ -255,3 +255,16 @@ sources needs an explicit completeness check — every filed item appears somewh
 including as an explicit rejection — not merely an accuracy check on the items that survived.
 Corollary for the reviewer: keep your own list of what you filed, because you are the only party
 positioned to notice your finding vanished.
+
+### A residual neutralised in conduct is not closed
+Ruled 2026-09-06. When a known defect is mitigated by an agent agreeing to behave carefully rather
+than by changing the artifact, the mitigation is a property of that agent's intention, not of the
+system. It evaporates on a lapse of attention, on a long pass, or on any re-run by an agent that
+never received the instruction. Record such a mitigation in three parts — the residual, the
+mitigation, and the explicit statement that the mitigation is not a property of the artifact —
+because a reader seeing only the first two concludes it was fixed.
+This is the general case of why rules get written into documents at all: a written rule makes the
+error impossible, a briefed one makes it merely detectable. Applies symmetrically to the reviewer's
+own promises. If the only thing standing between a design and a known failure is that someone
+intends to be careful, the design has not addressed it, and "the team is aware of this" is not a
+mitigation in a design document either.
