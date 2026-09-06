@@ -138,3 +138,83 @@ quote and line number, not defects in shipped code.
 ## Anti-patterns discovered
 
 (append below after each cycle)
+
+---
+
+## PRD-scoped criteria (design documents, not code)
+
+Added 2026-09-06. Applies when the review target is a product design document or a
+review *plan* over one. The repo-internal criteria above (layer model, SLICE_DOMAINS,
+merge-review.mjs, reviewer prompt shape) are NOT applied to such targets.
+
+### Judging a design document
+- Bar must be stated before findings: "complete enough to DECIDE TO BUILD" vs
+  "complete enough to implement from." Underspecified implementation detail is a
+  finding, never a showstopper, under the former.
+- A stated uncertainty is not a defect; an unstated one is. Locate the document's
+  own uncertainty registers (out-of-scope / open-decisions / risks / appendix) and
+  grep them BEFORE filing any gap-type finding. Filing something the author already
+  flagged is the characteristic failure of design-doc review.
+- Evidence for a design doc = verbatim quoted substring + line range + section id,
+  resolving by grep against a content-pinned artifact. Where the finding claims a
+  contradiction, BOTH sides must be quoted; a one-sided quote cannot establish one.
+- Freeze on content (sha256 / blob), never on HEAD. A moving HEAD is not a violation.
+- Data-model sketches are judged against their CONSUMERS, one consumer at a time.
+  Enumerate every section that reads the model, then check each for a field or
+  relation the model lacks. A model reviewed in isolation always passes.
+
+### Judging a coverage ledger / partition plan as architecture
+A review plan that partitions a document is itself an architecture: lots are modules,
+ownership is dependency direction, cross-cutting lots are the seams. Named checks:
+
+- **Contiguity check.** Recompute every range: each starts at prev_end+1, first=1,
+  last=EOF. Then verify each boundary against the real section headings in the target,
+  not against the plan's own prose. A plan can be internally contiguous and still
+  mis-cut the document.
+- **Distribution-arithmetic check.** Any per-owner line-count summary offered as a
+  mechanical check must sum to the document length. Summaries that do not sum teach
+  the adjudicator to distrust the check that actually works.
+- **Two-layer ownership.** "One primary owner per line" plus "one accountable owner
+  per cross-cutting question" is a sound partition scheme. Deliberate re-reading of
+  owned lines by a cross-cutting lot is BY DESIGN and is not an overlap defect. The
+  real defects are: an unowned line, an unowned QUESTION, an undeclared overlap, or
+  two owners sharing one lens.
+- **One-lens test.** Two lots differ only in framing words if they resolve to the same
+  mechanical check over the same artifact. Ask: what concrete field or clause would
+  each inspect? Identical answers mean one lens, two owners, regardless of how the
+  questions are worded.
+- **Disjointness-vs-merge contradiction.** A plan that asserts question-disjointness
+  AND ships a merge rule for two owners converging on one defect has already predicted
+  its own collision. The merge rule is correct; the disjointness claim is the defect.
+- **Cross-agent dependency realizability.** THE high-yield check. For every stated
+  "X runs after Y," ask whether X's owner and Y's owner are the same agent. Cross-agent
+  arrows are only realizable if the schedule has more than one round AND a defined
+  artifact handoff. Under a single parallel dispatch where sibling agents cannot address
+  each other, cross-agent arrows are unimplementable and must be restated as
+  "re-read the lines yourself," not as ordering.
+- **Answerability.** A lot whose charge cannot return "no" is decoration. Mandatory
+  lots must specify what SILENCE means; the strong form is "an unanswered lot is itself
+  a finding at adjudication."
+- **Contradiction rule, not just convergence.** Merge rules cover two owners finding the
+  same defect. Plans routinely omit the harder case: two owners reaching OPPOSITE
+  verdicts on the same lines through different lenses. Absent a rule, the adjudicator
+  invents one.
+- **Mitigation-points-at-nothing.** Every risk-register mitigation must name a control
+  that exists elsewhere in the same document, with matching scope. Check the cited
+  control's actual line ranges against the risk's subject; mitigations frequently cite
+  a gate that excludes the very range it is claimed to protect.
+- **Write-discipline coherence.** A plan that both forbids all agent writes and permits
+  critics to append to their own memory files contradicts itself. Resolve explicitly:
+  criteria memory is the only durable control across sessions, so an absolute
+  read-only clause silently disables it.
+
+### Anti-patterns discovered (ledger review, cycle 1)
+- Ordering sections that read as a dependency DAG but encode reading order within a
+  single agent. Acyclic, so no deadlock, but ambiguous enough that some owners stall
+  waiting for outputs that will never arrive separately.
+- Cross-cutting lots clustered on the privacy/identity pair while the same artifact's
+  measurement and prompting consumers get none. Symptom: the domain owner is given
+  narrow base lots "with weight in the cross-cutting layer," and the cross-cutting
+  layer then covers a minority of that domain's real seams.
+- Owner-distribution summaries that are exact for four owners and wrong for the fifth
+  (the residual owner absorbing front matter and short tail sections).

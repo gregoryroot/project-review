@@ -43,3 +43,77 @@
 ## Anti-patterns already avoided here (do not "suggest" these)
 - No mocks means no mock/prod divergence in the current suite. Do not invent that finding.
 - Fixture compare is byte-for-byte with nothing excluded; that is intentional and strong.
+
+---
+
+## PRD / design-doc testability criteria (added 2026-09-06, cycle 1)
+
+Applies when the review subject is a PROSE DESIGN DOCUMENT rather than code. Checks 1-7
+and 9 above target `scripts/` and DO NOT apply; only `markdown-artifact-untestable`
+transfers. Report that honestly in `criteria_applied` instead of padding the list.
+
+### D1 `falsifiability-classification`
+Classify each requirement as: (a) falsifiable — observable input/output or state pair with
+a stated bound; (b) falsifiable-but-unbounded — testable verb, missing threshold; (c)
+unfalsifiable as written — evaluative adjective, no observable, or self-referential.
+For (b) and (c) name the concrete regression that ships green. A requirement no
+implementation could fail is the design-doc analogue of a vacuously passing test.
+
+### D2 `countable-unit` (strongest single predictor of a dischargeable charge)
+A charge or requirement is verifiable when it names a COUNTABLE unit and a per-unit
+verdict ("each of F1-F15", "each of 6 milestones"). Charges phrased as open questions
+("what does X cost", "does X serve the users") cannot fail: any answer discharges them.
+Fix form: bind to an enumeration + require one verdict per element.
+
+### D3 `assertion-without-minimum`
+An "explicit assertion required, silence is a finding" construction fixes the
+FALSE-NEGATIVE-by-omission failure only. Without a stated minimum (per-element verdicts,
+required citation count) it stays dischargeable by one vague sentence. Presence is
+checkable; sufficiency is not. Always ask: what is the thinnest output that passes?
+
+### D4 `stated-vs-unstated-uncertainty gate`
+A stated uncertainty is not a defect; an unstated one is. Two failure directions, both real:
+- UNDER-SCOPE (false positives pass): the gate enumerates specific ranges (an open-questions
+  section, an appendix) but authors also flag uncertainty INLINE elsewhere. Grep the whole
+  document for hedges, not just the register sections.
+- OVER-SUPPRESSION (false negatives struck): a subject-level "already stated" strike kills
+  legitimate findings that assert MORE than the author's flag. Correct key is "the finding
+  asserts nothing beyond what the flag states," not "same subject."
+Process instructions of the form "consult X before filing" are UNVERIFIABLE BY INSPECTION.
+Convert to output-checkable: require each gap-type finding to carry an explicit
+not-stated-in-<ranges> token with grep evidence; a missing token is mechanically strikeable.
+
+### D5 `one-lens-two-owners`
+In a multi-reviewer partition, the real defects are an unowned line, an UNDECLARED overlap,
+and two owners on one lens. Deliberate re-reading of shared lines is NOT a defect. Test for
+one-lens-two-owners on the QUESTION TEXT, not the annotation: if two charges share their
+operative verb and object ("can the data model represent/express revocation"), the framing
+labels attached in prose do not separate them. A merge rule that preserves one half is
+evidence the collision was anticipated rather than resolved, and it silently drops the
+other half.
+
+### D6 `exclusion-clause-holes`
+Document-wide lots carved with "EXCLUDING lines A-B, which is lot Z's" create holes when
+lot Z's question is narrower than the excluded range or its second reader is scoped to part
+of it. Always re-intersect: excluded range minus what Z actually asks = unowned lens.
+
+### D7 `id-namespace-collision`
+Where a citation scheme mandates "section id" but the document reuses the same token space
+for sub-items (e.g. sections S0-S19 while a safety section numbers its own requirements
+S1-S7), cross-references become ambiguous and merge/adjudication keys collide. Make the
+line range the primary key; require qualified ids for sub-items.
+
+### D8 `measurability-under-privacy-constraint`
+For any local-first / telemetry-free design that also states success metrics, check that
+SOME lot owns the intersection. By-section slicing structurally drops it: the metrics
+section and the privacy/data-model sections have different owners, and the question
+"who computes this, from what data, on whose device" belongs to neither alone.
+
+### D9 `arithmetic-in-plans`
+Recompute every stated total, distribution, and contiguity claim in a plan. Contiguity
+(each range starts at prev_end+1, first=1, last=N) is cheap to verify programmatically
+and is worth confirming explicitly when it holds, not only when it fails.
+
+### Calibration
+Confirm what verifies clean, with the arithmetic shown. A critic that reports only
+negatives cannot be distinguished from one that manufactures them.

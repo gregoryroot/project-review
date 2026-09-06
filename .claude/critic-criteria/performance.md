@@ -60,3 +60,53 @@ unbounded collection in this codebase is a deviation from house style.
 - `no-fabricated-hot-path`: this repo has no request path; reject findings phrased
   as request/RPS degradation. Scale is repo size and finding count.
 - `demo-repo-excluded`: examples/demo-repo/ is intentional bad code, not production.
+
+---
+
+## PRD / design-document feasibility criteria (appended — durable)
+
+When the artifact under review is a design document or a review plan rather than
+running code, "performance" reframes to FEASIBILITY, OPERATING COST, DEVICE RESOURCE
+BUDGET, and REVIEW THROUGHPUT. The runtime checks above do not apply. Named checks:
+
+- `no-fabricated-hot-path` (already binding): a local-first, one-user-per-device app has
+  no request path. Index/cache/pagination findings against it are the generic-review
+  failure this repo exists to defeat. Reject them.
+- `fixed-annual-floor-vs-zero-revenue`: a free product still carries costs that do not
+  shrink at one user — store developer accounts, code signing, domain, push
+  infrastructure minimums. Cost a design against its stated distribution scale, and if
+  the document states no scale, the missing scale is the finding.
+- `os-background-execution-permit-vs-assume`: any adaptive/scheduled/background policy
+  must be judged against what iOS and Android background execution policy will PERMIT,
+  not what the policy assumes it can schedule. A policy assuming wakeups the OS will not
+  grant is a correctness defect wearing a performance costume.
+- `time-to-first-input-as-latency`: for products whose users face a motivation barrier,
+  cold start to first interactive control is the real latency metric. Steps added to the
+  shortest path are performance defects.
+- `stated-uncertainty-is-not-a-defect`: grep the document's own out-of-scope, open-
+  decisions, risks and uncertainty sections BEFORE filing any gap. An author-flagged
+  unknown is a NOTE at most. An UNSTATED one is the finding, and its unstated status
+  must be said explicitly.
+- `cost-driver-vs-cost-section-boundary`: cost lives where the FEATURES are, not only
+  where the pricing section is. A review scope that confines cost analysis to the
+  monetization section cannot detect a cost driver introduced by a feature list. Check
+  that the feature enumeration is inside some cost-bearing lot's read range.
+
+### Review-plan (work-partition) criteria
+When critiquing a review plan, partition, or dispatch ledger, throughput is the metric:
+- `concurrency-unit-is-the-agent`: lots are parallel only if their OWNERS differ. N
+  disjoint lots held by one owner run serially. Any "runs fully in parallel" claim must
+  be re-derived per owner, not per lot.
+- `last-starting-largest-lot`: identify the lot with the most dependencies AND the
+  largest surface. That lot, not the one the plan names, is usually the critical path.
+- `load-table-must-sum`: per-owner line and lot totals must sum to the whole artifact. A
+  distribution table that oversums is unchecked arithmetic and its risk register is
+  reasoning from a number nobody verified.
+- `mitigation-must-enumerate-the-real-load`: an "accept and monitor" on overload is only
+  supported if the mitigation names every lot the owner holds. Omitting the biggest one
+  makes the acceptance unsupported rather than dishonest.
+- `read-grant-asymmetry`: when sibling lots carry explicit "may read" grants and one does
+  not, the one without is usually unanswerable as written. The asymmetry is the evidence.
+- `convergence-needs-a-merge-rule`: if two owners hold different questions over the same
+  lines, there must be an adjudication rule for a converged finding. A merge rule naming
+  only one pair of domains leaves every other pair unhandled.
