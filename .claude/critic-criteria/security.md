@@ -142,3 +142,24 @@ live vulnerability. Severity language should say "if built."
   document. The error is the reviewer's; keep it structurally separate in any report.
 - Classic OWASP web categories against a local-first design with no server. Absence of auth is not
   automatically a finding; re-identification and unwanted disclosure are the harms that matter.
+
+### Amendment to `clinical-vs-design-boundary` — the coercion carve-out (2026-09-06)
+
+The mechanism/psychology axis as first written bars "predicts how a person responds." Applied
+unqualified, that bars COERCION findings, because coercion is by definition realized through a
+person's response to pressure — and coercion modeling is mandatory wherever a sharing, ally, or
+caregiver feature exists. The axis must therefore carry its qualifier or it disables the threat class
+it was written to protect:
+
+> Barred: a claim about how a person responds **as a matter of their condition**.
+> In scope: a claim about how a person responds **as a consequence of a mechanism the design creates**
+> — observability, pressure, dependency, or the removal of an exit.
+
+Test for the hard case: name the mechanism first. "The ally can observe non-response" is a mechanism.
+"A controlling ally can use that observability to compel logging" is its consequence and is in scope.
+"Someone with depression will feel guilty about a gap" is a condition claim and is out. If the finding
+cannot name the mechanism before it names the feeling, it is clinical.
+
+Corollary for review-process design: any rule that states the bar in two places must state the
+qualifier in both. A qualified statement plus an unqualified restatement, with precedence given to
+the restatement, silently deletes the carve-out.
