@@ -132,3 +132,16 @@ When critiquing a review plan, partition, or dispatch ledger, throughput is the 
 - `one-artifact-one-path`: under conflicting output-path instructions, write the dispatch
   path and raise the conflict; do not hedge by writing both. A stray duplicate is the
   evidence ambiguity a raw-file protocol exists to remove.
+- `cite-to-source-vs-file-on-subject`: a lot may quote evidence from territory another lot
+  owns in order to source its OWN question, without filing a finding about that territory's
+  subject. Quote the feature to establish which resource budget is drawn; do not file on the
+  feature. Keeps sourcing complete without creating a second owner on one lens.
+- `name-the-reading-you-rely-on`: when a rule is ambiguous and you act on one reading, state
+  the reading inside the finding. This converts a silent scope assumption into a checkable
+  claim — the same move that turns citation drift from invisible into measurable. It also
+  survives a later ruling: if the reading is overturned, the affected findings are findable.
+- `accepted-residual-on-a-clock`: a defect accepted rather than fixed should carry a
+  conversion trigger — if it causes actual evidence loss during execution, it becomes
+  mandatory at that moment. The agent who owns the affected lot reports that it came due
+  rather than quietly working around it; working around it destroys the evidence that the
+  acceptance was wrong.
