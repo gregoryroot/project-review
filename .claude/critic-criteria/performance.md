@@ -110,3 +110,25 @@ When critiquing a review plan, partition, or dispatch ledger, throughput is the 
 - `convergence-needs-a-merge-rule`: if two owners hold different questions over the same
   lines, there must be an adjudication rule for a converged finding. A merge rule naming
   only one pair of domains leaves every other pair unhandled.
+
+### Cycle-2 additions (review-plan critique, durable)
+- `recompute-never-read-the-description`: when a plan describes its own load, critical path,
+  or distribution, recompute it from the constituent ranges. The highest-value finding of
+  this kind is the divergence: a register whose DESCRIPTION was corrected while the
+  underlying NUMBER got worse. Corrections to prose and changes to load are independent
+  events and a revision can do both in opposite directions without noticing.
+- `fix-interaction-unrecorded`: two individually-correct fixes that both add work to the
+  same owner compound. Check whether any fix note or risk entry records the interaction;
+  usually none does, because each fix was reasoned about alone.
+- `monitoring-is-not-mitigation`: "watch it" against a named bottleneck is the one control
+  that cannot fail visibly. Treat it as an open risk, not a closed one.
+- `fix-propagation-to-references`: a fix applied at its definition site and not at the
+  ordering/dispatch/summary lists that reference it will be executed at the old scope by
+  any agent that reads the reference as operative. Check every list that restates the
+  thing fixed.
+- `plural-problem-singular-remedy`: when a fix note states the defect in the plural ("both
+  X and Y were walled off") and the remedy touches one, the other half is still open. The
+  note's own wording is the evidence.
+- `one-artifact-one-path`: under conflicting output-path instructions, write the dispatch
+  path and raise the conflict; do not hedge by writing both. A stray duplicate is the
+  evidence ambiguity a raw-file protocol exists to remove.
