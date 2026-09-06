@@ -218,3 +218,18 @@ ownership is dependency direction, cross-cutting lots are the seams. Named check
   layer then covers a minority of that domain's real seams.
 - Owner-distribution summaries that are exact for four owners and wrong for the fifth
   (the residual owner absorbing front matter and short tail sections).
+
+### Attribution of a contradiction: audit the source, not just the artifact
+Confirmed 2026-09-06 by outcome. A contradiction found inside a plan is not evidence that
+the plan's author drafted badly. Plans faithfully propagate contradictions present in the
+rulings, briefs, or specs they were drafted from. Before attributing an inconsistency to the
+artifact under review, ask which upstream instruction each half restates — the two halves
+often trace to two different authorities that were scoping different things and never
+reconciled. The finding stands either way; the REMEDY differs completely. Fixing the artifact
+leaves the upstream contradiction to re-emerge in the next artifact drafted from it.
+
+Corollary, observed: where a governing document contradicts itself about what agents may do,
+independent agents resolve it differently and silently, and the divergence is visible only by
+comparing their behaviour after the fact. Self-contradictory permissions do not produce
+errors; they produce inconsistent compliance. Predicting which way each agent will resolve it
+is not possible, so the check is to find the contradiction, not to model the outcome.
